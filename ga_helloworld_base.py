@@ -3,11 +3,11 @@ import time
 import math
 
 # constant parameters
-GA_POPSIZE = 16384  # population size
+GA_POPSIZE = 8192  # population size
 GA_MAXITER = 16384  # maximum iterations
 GA_ELITRATE = 0.10  # elitism rate (10%)
 GA_MUTATIONRATE = 0.25  # mutation probability
-GA_TARGET = "but why did you cheat on me? please fuck me harder"  # target string
+GA_TARGET = "what does this shit do?"  # target string
 
 
 # candidate class representing an individual
