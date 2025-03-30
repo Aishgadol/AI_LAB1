@@ -1,19 +1,20 @@
 import random
 import time
 import math
+import matplotlib.pyplot as plt  #import matplotlib for plotting
 
 # constant parameters
-GA_POPSIZE = 8192  # population size
-GA_MAXITER = 16384  # maximum iterations
-GA_ELITRATE = 0.10  # elitism rate (10%)
-GA_MUTATIONRATE = 0.25  # mutation probability
-GA_TARGET = "testing something longer than hello_world"  # target string
+GA_POPSIZE = 8192  #population size
+GA_MAXITER = 16384  #maximum iterations
+GA_ELITRATE = 0.10  #elitism rate (10%)
+GA_MUTATIONRATE = 0.25  #mutation probability
+GA_TARGET = "testing something longer than hello_world"  #target string
 
 # candidate class representing an individual
 class Candidate:
     def __init__(self, gene, fitness=0):
-        self.gene = gene  # candidate string
-        self.fitness = fitness  # fitness score
+        self.gene = gene  #candidate string
+        self.fitness = fitness  #fitness score
 
 # initialize population and buffer
 def init_population():
@@ -67,10 +68,8 @@ def mutate(candidate):
 def mate(population, buffer):
     elite_size = int(GA_POPSIZE * GA_ELITRATE)
     target_length = len(GA_TARGET)
-
     #copy best candidates to buffer
     elitism(population, buffer, elite_size)
-
     #create rest of new generation by crossover and mutation
     for i in range(elite_size, GA_POPSIZE):
         #choose two parents from top half of population
@@ -94,7 +93,7 @@ def print_best(population):
 def swap(population, buffer):
     return buffer, population
 
-#compute fitness stats (mean, std, worst, range)
+#new: compute fitness stats (mean, std, worst, range)
 def compute_fitness_statistics(population):
     #get all fitness values from population
     fitness_values = [cand.fitness for cand in population]
@@ -117,8 +116,7 @@ def compute_fitness_statistics(population):
         "worst_candidate": population[-1]
     }
 
-
-#compute timing metrics (cpu time for generation and elapsed time overall)
+#new: compute timing metrics (cpu time for generation and elapsed time overall)
 def compute_timing_metrics(generation_start_cpu, overall_start_wall):
     #get current cpu and wall time
     current_cpu = time.process_time()
@@ -132,12 +130,48 @@ def compute_timing_metrics(generation_start_cpu, overall_start_wall):
         "elapsed_time": elapsed_time
     }
 
-#main genetic algorithm loop
+#new: plot fitness evolution over generations (line plot)
+def plot_fitness_evolution(best_history, mean_history, worst_history):
+    generations = list(range(len(best_history)))
+    plt.figure()  #create new figure
+    #plot best fitness
+    plt.plot(generations, best_history, label="best")
+    #plot mean fitness
+    plt.plot(generations, mean_history, label="mean")
+    #plot worst fitness
+    plt.plot(generations, worst_history, label="worst")
+    plt.xlabel("generation")
+    plt.ylabel("fitness")
+    plt.title("fitness evolution over generations")
+    plt.legend()
+    plt.grid(True)
+    plt.show()  #display plot
+
+#new: plot boxplots of fitness per generation
+def plot_fitness_boxplots(fitness_distributions):
+    plt.figure()  #create new figure
+    #set flier (outlier) properties to diamond shape
+    flierprops = dict(marker='D', markersize=4, linestyle='none', markeredgecolor='black')
+    #create boxplot; showmeans is optional but not required
+    plt.boxplot(fitness_distributions, flierprops=flierprops, patch_artist=True)
+    plt.xlabel("generation")
+    plt.ylabel("fitness")
+    plt.title("fitness distribution per generation")
+    plt.grid(True)
+    plt.show()  #display plot
+
+# main genetic algorithm loop
 def main():
     random.seed(time.time())  #seed random number generator
     population, buffer = init_population()
 
     overall_start_wall = time.time()  #start overall wall time
+
+    #lists to store fitness history and distributions
+    best_history = []
+    mean_history = []
+    worst_history = []
+    fitness_distributions = []
 
     for iteration in range(GA_MAXITER):
         generation_start_cpu = time.process_time()  #start cpu time for this generation
@@ -157,6 +191,13 @@ def main():
         print(f"generation {iteration}: cpu time = {timing['generation_cpu_time']:.4f} s, "
               f"elapsed time = {timing['elapsed_time']:.4f} s")
 
+        #store fitness history for plotting later
+        best_history.append(population[0].fitness)
+        mean_history.append(stats['mean'])
+        worst_history.append(stats['worst_fitness'])
+        #store full fitness distribution for boxplot
+        fitness_distributions.append([cand.fitness for cand in population])
+
         #analysis: fitness stats help check convergence; timing shows performance tradeoffs
 
         if population[0].fitness == 0:
@@ -165,6 +206,10 @@ def main():
 
         mate(population, buffer)  #generate new candidates by mating
         population, buffer = swap(population, buffer)  #swap population and buffer
+
+    #after ga run, plot fitness evolution and boxplots
+    plot_fitness_evolution(best_history, mean_history, worst_history)
+    plot_fitness_boxplots(fitness_distributions)
 
 if __name__ == "__main__":
     main()
