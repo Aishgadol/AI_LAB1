@@ -1,14 +1,15 @@
 import random
 import time
 import math
+import numpy as np  #import numpy for calculations
 import matplotlib.pyplot as plt  #import matplotlib for plotting
 
 # constant parameters
 GA_POPSIZE = 2*8192  #population size
 GA_MAXITER = 16384  #maximum iterations
 GA_ELITRATE = 0.10  #elitism rate (10%)
-GA_MUTATIONRATE = 0.45  #mutation probability
-GA_TARGET = "this stupid algorithm_cant do shit"  #target string
+GA_MUTATIONRATE = 0.55  #mutation probability
+GA_TARGET = "impossible to converge, but ill try "  #target string
 
 # candidate class representing an individual
 class Candidate:
@@ -152,7 +153,7 @@ def plot_fitness_boxplots(fitness_distributions):
     plt.figure(figsize=(14, 8))  #create bigger figure window
     #set flier (outlier) properties to diamond shape in blue
     flierprops = dict(marker='D', markersize=4, linestyle='none', markeredgecolor='blue')
-    # set box properties for better visibility on white background
+    #set box properties for better visibility on white background
     boxprops = dict(facecolor='lightblue', color='blue', linewidth=1.5)
     whiskerprops = dict(color='blue', linewidth=1.5)
     capprops = dict(color='blue', linewidth=1.5)
@@ -167,14 +168,44 @@ def plot_fitness_boxplots(fitness_distributions):
         indices = list(range(total))
         sampled_distributions = fitness_distributions
         xtick_labels = [str(i) for i in indices]
-    plt.boxplot(sampled_distributions, flierprops=flierprops, boxprops=boxprops,
-                whiskerprops=whiskerprops, capprops=capprops, medianprops=medianprops, patch_artist=True)
+    bp = plt.boxplot(sampled_distributions, flierprops=flierprops, boxprops=boxprops,
+                     whiskerprops=whiskerprops, capprops=capprops, medianprops=medianprops, patch_artist=True)
     plt.xlabel("generation")
     plt.ylabel("fitness")
     plt.title("fitness distribution per generation")
     #set x tick labels to show generation numbers
     plt.xticks(range(1, len(indices) + 1), xtick_labels)
     plt.grid(True)
+
+    # add annotations for each box: median, lower and upper whiskers
+    for i, data in enumerate(sampled_distributions):
+        x = i + 1  # x position for current box
+        # compute quartiles and whiskers
+        Q1 = np.percentile(data, 25)
+        Q3 = np.percentile(data, 75)
+        IQR = Q3 - Q1
+        lower_candidates = [v for v in data if v >= Q1 - 1.5 * IQR]
+        lower_whisker = min(lower_candidates) if lower_candidates else np.min(data)
+        upper_candidates = [v for v in data if v <= Q3 + 1.5 * IQR]
+        upper_whisker = max(upper_candidates) if upper_candidates else np.max(data)
+        median_val = np.median(data)
+
+        # annotate median value (red line)
+        plt.text(x + 0.1, median_val, f"{median_val:.1f}", color="red", fontsize=8, verticalalignment='center')
+        # annotate lower whisker value
+        plt.text(x - 0.3, lower_whisker, f"{lower_whisker:.1f}", color="blue", fontsize=8, verticalalignment='center')
+        # annotate upper whisker value
+        plt.text(x + 0.1, upper_whisker, f"{upper_whisker:.1f}", color="blue", fontsize=8, verticalalignment='center')
+
+    # add custom legend for boxplot elements
+    import matplotlib.lines as mlines
+    import matplotlib.patches as mpatches
+    median_line = mlines.Line2D([], [], color='red', linewidth=2, label='median')
+    whisker_line = mlines.Line2D([], [], color='blue', linewidth=1.5, label='whiskers (min/max non-outliers)')
+    box_patch = mpatches.Patch(facecolor='lightblue', edgecolor='blue', label='iqr (25th-75th percentile)')
+    outlier_marker = mlines.Line2D([], [], marker='D', color='blue', linestyle='none', markersize=4, label='outliers')
+    plt.legend(handles=[box_patch, median_line, whisker_line, outlier_marker], loc='upper right')
+
     plt.show()  #display plot
 
 # main genetic algorithm loop
