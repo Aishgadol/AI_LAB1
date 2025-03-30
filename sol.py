@@ -104,15 +104,38 @@ def swap(population, buffer):
     return buffer, population
 
 
+# report additional stats and timing info for current generation
+def report_stats(gen, population, start_time, start_ticks):
+    #calculate mean fitness
+    total = sum(c.fitness for c in population)
+    mean_fit = total / len(population)
+    #calculate standard deviation
+    variance = sum((c.fitness - mean_fit) ** 2 for c in population) / len(population)
+    std_fit = math.sqrt(variance)
+    #get worst candidate (last in sorted population)
+    worst_candidate = population[-1]
+    #calculate fitness range
+    fit_range = worst_candidate.fitness - population[0].fitness
+    #calculate cpu time ticks and elapsed time
+    ticks = time.process_time() - start_ticks
+    elapsed = time.time() - start_time
+    print(f"gen: {gen}, mean: {mean_fit:.2f}, std: {std_fit:.2f}, worst: {worst_candidate.gene} ({worst_candidate.fitness}), range: {fit_range}, ticks: {ticks:.4f}, elapsed: {elapsed:.4f}")
+
+
 # main genetic algorithm loop
 def main():
     random.seed(time.time())  # seed random number generator
     population, buffer = init_population()
+    generation = 0  #new: generation counter
+    start_time = time.time()  #new: absolute start time
+    start_ticks = time.process_time()  #new: cpu time start ticks
 
     for _ in range(GA_MAXITER):
+        generation += 1  #new: increment generation count
         calc_fitness(population)  # calculate fitness for each candidate
         sort_by_fitness(population)  # sort candidates by fitness
         print_best(population)  # print current best candidate
+        report_stats(generation, population, start_time, start_ticks)  #new: report stats and timing info
 
         # if best candidate matches target exactly, exit loop
         if population[0].fitness == 0:
