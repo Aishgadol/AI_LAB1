@@ -4,11 +4,11 @@ import math
 import matplotlib.pyplot as plt  #import matplotlib for plotting
 
 # constant parameters
-GA_POPSIZE = 8192  #population size
+GA_POPSIZE = 2*8192  #population size
 GA_MAXITER = 16384  #maximum iterations
 GA_ELITRATE = 0.10  #elitism rate (10%)
-GA_MUTATIONRATE = 0.25  #mutation probability
-GA_TARGET = "testing something longer than hello_world"  #target string
+GA_MUTATIONRATE = 0.45  #mutation probability
+GA_TARGET = "this stupid algorithm_cant do shit"  #target string
 
 # candidate class representing an individual
 class Candidate:
@@ -133,13 +133,13 @@ def compute_timing_metrics(generation_start_cpu, overall_start_wall):
 #new: plot fitness evolution over generations (line plot)
 def plot_fitness_evolution(best_history, mean_history, worst_history):
     generations = list(range(len(best_history)))
-    plt.figure()  #create new figure
+    plt.figure(figsize=(12, 6))  #create bigger figure window
     #plot best fitness
-    plt.plot(generations, best_history, label="best")
+    plt.plot(generations, best_history, label="best", linewidth=2)
     #plot mean fitness
-    plt.plot(generations, mean_history, label="mean")
+    plt.plot(generations, mean_history, label="mean", linewidth=2)
     #plot worst fitness
-    plt.plot(generations, worst_history, label="worst")
+    plt.plot(generations, worst_history, label="worst", linewidth=2)
     plt.xlabel("generation")
     plt.ylabel("fitness")
     plt.title("fitness evolution over generations")
@@ -147,16 +147,33 @@ def plot_fitness_evolution(best_history, mean_history, worst_history):
     plt.grid(True)
     plt.show()  #display plot
 
-#new: plot boxplots of fitness per generation
+#new: plot boxplots of fitness per generation (only 10 boxes evenly spaced)
 def plot_fitness_boxplots(fitness_distributions):
-    plt.figure()  #create new figure
-    #set flier (outlier) properties to diamond shape
-    flierprops = dict(marker='D', markersize=4, linestyle='none', markeredgecolor='black')
-    #create boxplot; showmeans is optional but not required
-    plt.boxplot(fitness_distributions, flierprops=flierprops, patch_artist=True)
+    plt.figure(figsize=(14, 8))  #create bigger figure window
+    #set flier (outlier) properties to diamond shape in blue
+    flierprops = dict(marker='D', markersize=4, linestyle='none', markeredgecolor='blue')
+    # set box properties for better visibility on white background
+    boxprops = dict(facecolor='lightblue', color='blue', linewidth=1.5)
+    whiskerprops = dict(color='blue', linewidth=1.5)
+    capprops = dict(color='blue', linewidth=1.5)
+    medianprops = dict(color='red', linewidth=2)
+    total = len(fitness_distributions)
+    if total > 10:
+        #select 10 evenly spaced indices from all generations
+        indices = [int(round(i * (total - 1) / 9)) for i in range(10)]
+        sampled_distributions = [fitness_distributions[i] for i in indices]
+        xtick_labels = [str(i) for i in indices]
+    else:
+        indices = list(range(total))
+        sampled_distributions = fitness_distributions
+        xtick_labels = [str(i) for i in indices]
+    plt.boxplot(sampled_distributions, flierprops=flierprops, boxprops=boxprops,
+                whiskerprops=whiskerprops, capprops=capprops, medianprops=medianprops, patch_artist=True)
     plt.xlabel("generation")
     plt.ylabel("fitness")
     plt.title("fitness distribution per generation")
+    #set x tick labels to show generation numbers
+    plt.xticks(range(1, len(indices) + 1), xtick_labels)
     plt.grid(True)
     plt.show()  #display plot
 
@@ -164,7 +181,6 @@ def plot_fitness_boxplots(fitness_distributions):
 def main():
     random.seed(time.time())  #seed random number generator
     population, buffer = init_population()
-
     overall_start_wall = time.time()  #start overall wall time
 
     #lists to store fitness history and distributions
@@ -175,7 +191,6 @@ def main():
 
     for iteration in range(GA_MAXITER):
         generation_start_cpu = time.process_time()  #start cpu time for this generation
-
         calc_fitness(population)  #calculate fitness for each candidate
         sort_by_fitness(population)  #sort candidates by fitness
         print_best(population)  #print best candidate
