@@ -10,6 +10,7 @@ GA_MAXITER = 16384  #maximum iterations
 GA_ELITRATE = 0.10  #elitism rate (10%)
 GA_MUTATIONRATE = 0.55  #mutation probability
 GA_TARGET = "impossible to converge, but ill try "  #target string
+GA_CROSSOVER_METHOD = "single"  #crossover method: "single", "two_point", or "uniform"
 
 # candidate class representing an individual
 class Candidate:
@@ -65,25 +66,88 @@ def mutate(candidate):
     gene_list[pos] = chr(new_val)
     candidate.gene = ''.join(gene_list)
 
+#crossover functions for different operators
+def single_point_crossover(parent1, parent2, target_length):
+    crossover_point = random.randint(0, target_length - 1)
+    # Child 1: first part from parent1, second part from parent2
+    child1 = parent1.gene[:crossover_point] + parent2.gene[crossover_point:]
+    # Child 2: first part from parent2, second part from parent1
+    child2 = parent2.gene[:crossover_point] + parent1.gene[crossover_point:]
+    return child1, child2
+
+def two_point_crossover(parent1, parent2, target_length):
+    """Two point crossover - creates two children by swapping the middle segment"""
+    # Get two random points and ensure they're in order
+    point1, point2 = sorted(random.sample(range(target_length), 2))
+    
+    # Child 1: outer parts from parent1, middle from parent2
+    child1 = (parent1.gene[:point1] + 
+              parent2.gene[point1:point2] + 
+              parent1.gene[point2:])
+    
+    # Child 2: outer parts from parent2, middle from parent1
+    child2 = (parent2.gene[:point1] + 
+              parent1.gene[point1:point2] + 
+              parent2.gene[point2:])
+    
+    return child1, child2
+
+def uniform_crossover(parent1, parent2, target_length):
+    """Uniform crossover - creates two complementary children by randomly selecting from parents"""
+    child1_gene = []
+    child2_gene = []
+    
+    for i in range(target_length):
+        if random.random() < 0.5:
+            # Take from parent1 for child1, parent2 for child2
+            child1_gene.append(parent1.gene[i])
+            child2_gene.append(parent2.gene[i])
+        else:
+            # Take from parent2 for child1, parent1 for child2
+            child1_gene.append(parent2.gene[i])
+            child2_gene.append(parent1.gene[i])
+    
+    return ''.join(child1_gene), ''.join(child2_gene)
+
 # mate candidates to produce new generation
 def mate(population, buffer):
     elite_size = int(GA_POPSIZE * GA_ELITRATE)
     target_length = len(GA_TARGET)
-    #copy best candidates to buffer
+    
+    # Copy best candidates to buffer
     elitism(population, buffer, elite_size)
-    #create rest of new generation by crossover and mutation
-    for i in range(elite_size, GA_POPSIZE):
-        #choose two parents from top half of population
+    
+    # Create rest of new generation by crossover and mutation
+    for i in range(elite_size, GA_POPSIZE - 1, 2):  # Step by 2, leave room for pairs
+        # Choose two parents from top half of population
         parent1 = population[random.randint(0, GA_POPSIZE // 2 - 1)]
         parent2 = population[random.randint(0, GA_POPSIZE // 2 - 1)]
-        #random crossover point
-        crossover_point = random.randint(0, target_length - 1)
-        #single-point crossover: combine parent genes at crossover point
-        new_gene = parent1.gene[:crossover_point] + parent2.gene[crossover_point:]
-        buffer[i] = Candidate(new_gene)
-        #apply mutation based on mutation rate
+        
+        # Get two children using selected crossover method
+        if GA_CROSSOVER_METHOD == "single":
+            child1, child2 = single_point_crossover(parent1, parent2, target_length)
+        elif GA_CROSSOVER_METHOD == "two_point":
+            child1, child2 = two_point_crossover(parent1, parent2, target_length)
+        elif GA_CROSSOVER_METHOD == "uniform":
+            child1, child2 = uniform_crossover(parent1, parent2, target_length)
+        else:
+            child1, child2 = single_point_crossover(parent1, parent2, target_length)
+        
+        # Add both children
+        buffer[i] = Candidate(child1)
+        buffer[i + 1] = Candidate(child2)
+        
+        # Apply mutation to each child independently
         if random.random() < GA_MUTATIONRATE:
             mutate(buffer[i])
+        if random.random() < GA_MUTATIONRATE:
+            mutate(buffer[i + 1])
+    
+    # Handle last position if population size is odd
+    if GA_POPSIZE % 2 == 1 and elite_size % 2 == 0:
+        buffer[-1] = Candidate(buffer[-2].gene)  # Copy the last good solution
+        if random.random() < GA_MUTATIONRATE:
+            mutate(buffer[-1])
 
 # print best candidate from population
 def print_best(population):
@@ -142,7 +206,7 @@ def plot_fitness_evolution(best_history, mean_history, worst_history):
     plt.plot(generations, worst_history, label="worst", linewidth=2)
     plt.xlabel("generation")
     plt.ylabel("fitness")
-    plt.title("fitness evolution over generations")
+    plt.title(f"fitness evolution over generations (crossover: {GA_CROSSOVER_METHOD})")
     plt.legend()
     plt.grid(True)
     plt.show()  #display plot
@@ -170,7 +234,7 @@ def plot_fitness_boxplots(fitness_distributions):
                      whiskerprops=whiskerprops, capprops=capprops, medianprops=medianprops, patch_artist=True)
     plt.xlabel("generation")
     plt.ylabel("fitness")
-    plt.title("fitness distribution per generation")
+    plt.title(f"fitness distribution per generation (crossover: {GA_CROSSOVER_METHOD})")
     #set x tick labels to show generation numbers
     plt.xticks(range(1, len(indices) + 1), xtick_labels)
     plt.grid(True)
@@ -217,6 +281,8 @@ def main():
     mean_history = []
     worst_history = []
     fitness_distributions = []
+
+    print(f"Starting genetic algorithm with {GA_CROSSOVER_METHOD} crossover...")
 
     for iteration in range(GA_MAXITER):
         generation_start_cpu = time.process_time()  #start cpu time for this generation
