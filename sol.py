@@ -1,7 +1,7 @@
 import random
 import time
 import math
-import numpy as np  
+import numpy as np
 import matplotlib.pyplot as plt
 
 #constant params for genetic algorithm
@@ -11,7 +11,9 @@ GA_ELITRATE = 0.10  #keep the top 10% elite candidates
 GA_MUTATIONRATE = 0.55  #high mutation rate to avoid local optima
 GA_TARGET = "impossible to converge, but ill try "  #target string we're evolving toward
 GA_CROSSOVER_METHOD = "uniform"  #crossover type: "single", "two_point", or "uniform"
-GA_LCS_BONUS=10
+GA_LCS_BONUS = 10  #weight factor for LCS in combined fitness
+GA_FITNESS_MODE = "combined"  #fitness mode: "ascii", "lcs", or "combined"
+
 #represents a single solution in our population
 class Candidate:
     def __init__(self, gene, fitness=0):
@@ -31,15 +33,60 @@ def init_population():
     buffer = [Candidate('') for _ in range(GA_POPSIZE)]
     return population, buffer
 
+# Calculate the longest common subsequence between two strings
+def longest_common_subsequence(str1, str2):
+    m, n = len(str1), len(str2)
+    # Create a table to store LCS lengths
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    
+    # Fill the dp table
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if str1[i-1] == str2[j-1]:
+                dp[i][j] = dp[i-1][j-1] + 1
+            else:
+                dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+    
+    # Return length of LCS
+    return dp[m][n]
+
 #calculate fitness score for each candidate
 def calc_fitness(population):
     target = GA_TARGET
     target_length = len(target)
+    
     for candidate in population:
-        fitness = 0
-        #sum ascii diffs between candidate and target
-        for i in range(target_length):
-            fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
+        if GA_FITNESS_MODE == "ascii":
+            # Original ASCII difference method
+            fitness = 0
+            for i in range(target_length):
+                fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
+        
+        elif GA_FITNESS_MODE == "lcs":
+            # LCS method (higher LCS is better, so we invert)
+            lcs_length = longest_common_subsequence(candidate.gene, target)
+            fitness = target_length - lcs_length  # Invert so lower is better
+        
+        elif GA_FITNESS_MODE == "combined":
+            # Combine both methods
+            # ASCII difference part
+            ascii_fitness = 0
+            for i in range(target_length):
+                ascii_fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
+            
+            # LCS part
+            lcs_length = longest_common_subsequence(candidate.gene, target)
+            lcs_fitness = target_length - lcs_length  # Invert so lower is better
+            
+            # Combine with weighted LCS component
+            fitness = ascii_fitness + GA_LCS_BONUS * lcs_fitness
+        
+        else:
+            # Default to ASCII difference if mode is invalid
+            fitness = 0
+            for i in range(target_length):
+                fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
+            
         candidate.fitness = fitness
 
 #sort candidates by fitness (lower is better)
@@ -280,6 +327,8 @@ def main():
         print("No crossover operator detected, using single-point crossover by default.")
     else:
         print(f"Starting genetic algorithm with {GA_CROSSOVER_METHOD} crossover...")
+    
+    print(f"Using fitness mode: {GA_FITNESS_MODE}")
 
     for iteration in range(GA_MAXITER):
         generation_start_cpu = time.process_time()  #track per-generation time
@@ -320,3 +369,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
