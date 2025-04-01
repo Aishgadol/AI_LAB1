@@ -321,5 +321,7 @@ def main():
     plot_fitness_evolution(best_history, mean_history, worst_history)
     plot_fitness_boxplots(fitness_distributions)
 
+
 if __name__ == "__main__":
     main()
+
