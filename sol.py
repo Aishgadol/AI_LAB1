@@ -10,8 +10,8 @@ GA_MAXITER = 16384  #plenty of iterations to find solution
 GA_ELITRATE = 0.10  #keep the top 10% elite candidates
 GA_MUTATIONRATE = 0.55  #high mutation rate to avoid local optima
 GA_TARGET = "impossible to converge, but ill try "  #target string we're evolving toward
-GA_CROSSOVER_METHOD = "uniform"  #crossover type: "single", "two_point", or "uniform"
-GA_LCS_BONUS = 10  #weight factor for LCS in combined fitness
+GA_CROSSOVER_METHOD = "two_point"  #crossover type: "single", "two_point", or "uniform"
+GA_LCS_BONUS = 5  #weight factor for LCS in combined fitness
 GA_FITNESS_MODE = "combined"  #fitness mode: "ascii", "lcs", or "combined"
 
 #represents a single solution in our population
@@ -178,7 +178,6 @@ def mate(population, buffer):
         else:
             child1, child2 = single_point_crossover(parent1, parent2, target_length)
 
-        child1,child2=parent1.gene, parent2.gene
         #add children to next gen
         buffer[i] = Candidate(child1)
         buffer[i + 1] = Candidate(child2)
@@ -327,8 +326,11 @@ def main():
         print("No crossover operator detected, using single-point crossover by default.")
     else:
         print(f"Starting genetic algorithm with {GA_CROSSOVER_METHOD} crossover...")
-    
-    print(f"Using fitness mode: {GA_FITNESS_MODE}")
+
+    if GA_FITNESS_MODE not in ["ascii", "lcs", "combined"]:
+        print("No fitness mode selected, defaulting to ASCII")
+    else:
+        print(f"Using fitness mode: {GA_FITNESS_MODE}")
 
     for iteration in range(GA_MAXITER):
         generation_start_cpu = time.process_time()  #track per-generation time
