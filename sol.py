@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 GA_POPSIZE = 2*8192  #massive population size for better exploration
 GA_MAXITER = 16384  #plenty of iterations to find solution
 GA_ELITRATE = 0.10  #keep the top 10% elite candidates
-GA_MUTATIONRATE = 0.55  #high mutation rate to avoid local optima
-GA_TARGET = "impossible to converge, but ill try!"  #target string we're evolving toward
+GA_MUTATIONRATE = 0.0#0.55  #high mutation rate to avoid local optima
+GA_TARGET = "testing string 123 diff_chars"  #target string we're evolving toward
 GA_CROSSOVER_METHOD = "single"  #crossover type: "single", "two_point", or "uniform"
 GA_LCS_BONUS = 5  #weight factor for LCS in combined fitness
 GA_FITNESS_MODE = "ascii"  #fitness mode: "ascii", "lcs", or "combined"
