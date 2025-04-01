@@ -131,7 +131,6 @@ def compute_timing_metrics(generation_start_cpu, overall_start_wall):
         "elapsed_time": elapsed_time
     }
 
-#new: plot fitness evolution over generations (line plot)
 def plot_fitness_evolution(best_history, mean_history, worst_history):
     generations = list(range(len(best_history)))
     plt.figure(figsize=(12, 6))  #create bigger figure window
@@ -148,7 +147,6 @@ def plot_fitness_evolution(best_history, mean_history, worst_history):
     plt.grid(True)
     plt.show()  #display plot
 
-#new: plot boxplots of fitness per generation (only 10 boxes evenly spaced)
 def plot_fitness_boxplots(fitness_distributions):
     plt.figure(figsize=(14, 8))  #create bigger figure window
     #set flier (outlier) properties to diamond shape in blue
