@@ -1,37 +1,34 @@
-# test_parameters.py
 import matplotlib.pyplot as plt
-# If your GA code is in ga_code.py, adjust the line below accordingly:
-from ga_code import run_ga  # or however you import run_ga
+from sol import run_ga  # adjust if your GA code file is named differently
 
-
-def test_ga_combinations():
+def bullshit_func():
+    """
+    tests multiple parameter combinations for the ga and produces
+    a single figure with 3 subplots (one per crossover method).
+    each subplot has 4 lines (2 best combos and 2 worst combos).
+    """
     lcs_bonus_values = [1, 5, 10, 20, 50]
     mutation_rates = [0.25, 0.5, 0.75]
     fitness_modes = ["ascii", "lcs", "combined"]
     crossover_methods = ["single", "two_point", "uniform"]
 
-    # We’ll store all runs by crossover method, e.g.:
-    # results_by_crossover = {
-    #   "single": [
-    #       {
-    #           "fitness_mode": "ascii",
-    #           "lcs_bonus": 1,
-    #           "mutation_rate": 0.25,
-    #           "best_fitness_history": [...],
-    #           "converged_generation": ...
-    #       },
-    #       ...
-    #   ],
-    #   "two_point": [...],
-    #   "uniform": [...]
-    # }
+    # store results keyed by crossover method
     results_by_crossover = {method: [] for method in crossover_methods}
 
-    # Run GA for each combination
+    # gather total combos for better printing of progress
+    total_combos = len(crossover_methods) * len(fitness_modes) * len(lcs_bonus_values) * len(mutation_rates)
+    done_count = 0
+
+    print(f"\nstarting tests for {total_combos} total combinations...\n")
+
     for method in crossover_methods:
         for fm in fitness_modes:
             for lb in lcs_bonus_values:
                 for mr in mutation_rates:
+                    done_count += 1
+                    print(f"running combo #{done_count}/{total_combos} "
+                          f"(method={method}, mode={fm}, lcs_bonus={lb}, mut={mr})...")
+
                     run_data = run_ga(
                         crossover_method=method,
                         fitness_mode=fm,
@@ -39,7 +36,7 @@ def test_ga_combinations():
                         mutation_rate=mr
                     )
 
-                    # Store the results with metadata
+                    # store results along with metadata
                     results_by_crossover[method].append({
                         "fitness_mode": fm,
                         "lcs_bonus": lb,
@@ -48,26 +45,30 @@ def test_ga_combinations():
                         "converged_generation": run_data["converged_generation"]
                     })
 
-    # Now we produce a single figure with 3 subplots (one per crossover method).
+                    print(f"  done. converged_generation={run_data['converged_generation']}\n")
+
+    print("\nall runs completed. sorting results and generating final plot...")
+
+    # create a figure with 3 subplots (one per crossover method)
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 
     for i, method in enumerate(crossover_methods):
         ax = axes[i]
-        ax.set_title(f"Crossover: {method}")
-        ax.set_xlabel("Generation")
-        ax.set_ylabel("Best Fitness")
+        ax.set_title(f"crossover: {method}")
+        ax.set_xlabel("generation")
+        ax.set_ylabel("best fitness")
 
-        # Sort the results by converged_generation (fewest to largest)
+        # sort runs by converged_generation ascending
         method_results = sorted(
             results_by_crossover[method],
             key=lambda d: d["converged_generation"]
         )
 
-        # We want 2 best (lowest generations) and 2 worst (highest generations)
+        # pick the 2 best and 2 worst
         best_2 = method_results[:2]
         worst_2 = method_results[-2:]
 
-        # Combine them for plotting
+        # combine for plotting
         lines_to_plot = best_2 + worst_2
 
         for run_info in lines_to_plot:
@@ -77,21 +78,19 @@ def test_ga_combinations():
             conv_gen = run_info["converged_generation"]
             best_fit_hist = run_info["best_fitness_history"]
 
-            # X-axis = generation indices
-            generations = list(range(len(best_fit_hist)))
+            # x-axis = generation indices
+            generations = range(len(best_fit_hist))
 
-            # Legend label with # of gens to converge
-            legend_label = f"{fm}, lb={lb}, mut={mr} => {conv_gen} gens"
-
-            ax.plot(generations, best_fit_hist, label=legend_label, linewidth=2)
+            # label includes (mode, bonus, mut, converged)
+            label = f"{fm}, lcs={lb}, mut={mr} => {conv_gen} gens"
+            ax.plot(generations, best_fit_hist, label=label, linewidth=2)
 
         ax.legend()
         ax.grid(True)
 
-    # Show the entire figure with all 3 subplots
     plt.tight_layout()
     plt.show()
-
+    print("\nplot displayed. testing script is complete.")
 
 if __name__ == "__main__":
-    test_ga_combinations()
+    bullshit_func()
