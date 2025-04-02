@@ -5,11 +5,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 #constant params for genetic algorithm
-GA_POPSIZE = 2*8192  #massive population size for better exploration
-GA_MAXITER = 16384  #plenty of iterations to find solution
+GA_POPSIZE = 8000  #massive population size for better exploration
+GA_MAXITER = 500  #plenty of iterations to find solution
 GA_ELITRATE = 0.10  #keep the top 10% elite candidates
-GA_MUTATIONRATE = 0.0#0.55  #high mutation rate to avoid local optima
-GA_TARGET = "testing string 123 diff_chars"  #target string we're evolving toward
+GA_MUTATIONRATE = 0.55  #high mutation rate to avoid local optima
+GA_TARGET = "hello_world"  #target string we're evolving toward
 GA_CROSSOVER_METHOD = "single"  #crossover type: "single", "two_point", or "uniform"
 GA_LCS_BONUS = 5  #weight factor for LCS in combined fitness
 GA_FITNESS_MODE = "ascii"  #fitness mode: "ascii", "lcs", or "combined"
@@ -61,7 +61,7 @@ def calc_fitness(population):
             fitness = 0
             for i in range(target_length):
                 fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
-        
+
         elif GA_FITNESS_MODE == "lcs":
             # LCS method (higher LCS is better, so we invert)
             lcs_length = longest_common_subsequence(candidate.gene, target)
