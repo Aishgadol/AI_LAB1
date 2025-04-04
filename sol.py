@@ -5,14 +5,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # constant params for the genetic algorithm
-ga_popsize = 2000 # large population for better exploration
-ga_maxiter = 1500   # maximum iterations to find a good solution
+ga_popsize = 400 # large population for better exploration
+ga_maxiter = 150   # maximum iterations to find a good solution
 ga_elitrate = 0.10 # top 10% of candidates are kept as elite
 ga_mutationrate = 0.55  # higher mutation rate to escape local optima
 ga_target = "testing string123 diff_chars"  # the string we want to evolve towards
 ga_crossover_method = "two_point"  # crossover strategy: single, two_point, or uniform
 ga_lcs_bonus = 5  # weight factor for lcs in combined fitness
-ga_fitness_mode = "lcs"  # fitness mode: ascii, lcs, or combined
+ga_fitness_mode = "ascii"  # fitness mode: ascii, lcs, or combined
 ga_max_runtime = 120  # maximum runtime in seconds (2 minutes)
 
 # represents one candidate solution in the population
@@ -129,14 +129,27 @@ def uniform_crossover(parent1, parent2, target_length):
             child2_gene.append(parent1.gene[i])
     return ''.join(child1_gene), ''.join(child2_gene)
 
+# line ~149
+def roulette_wheel_select(candidates):
+    scores = [1.0 / (1.0 + c.fitness) for c in candidates]
+    total_score = sum(scores)
+    pick = random.random() * total_score
+    running_sum = 0.0
+    for i, s in enumerate(scores):
+        running_sum += s
+        if running_sum >= pick:
+            return candidates[i]
+    return candidates[-1]  # fallback
+
+
 # creates the next generation using selection, crossover, and mutation
 def mate(population, buffer):
     elite_size = int(ga_popsize * ga_elitrate)
     target_length = len(ga_target)
     elitism(population, buffer, elite_size)
     for i in range(elite_size, ga_popsize - 1, 2):
-        parent1 = population[random.randint(0, ga_popsize // 2 - 1)]
-        parent2 = population[random.randint(0, ga_popsize // 2 - 1)]
+        parent1 = roulette_wheel_select(population[:ga_popsize // 2])
+        parent2 = roulette_wheel_select(population[:ga_popsize // 2])
 
         if ga_crossover_method == "single":
             child1, child2 = single_point_crossover(parent1, parent2, target_length)
@@ -179,13 +192,23 @@ def compute_fitness_statistics(population):
     best_fitness = population[0].fitness
     worst_fitness = population[-1].fitness
     fitness_range = worst_fitness - best_fitness
-    return {
+
+    # new code to compute top-average selection probability ratio
+    scores = [1.0 / (1.0 + c.fitness) for c in population]
+    total_score = sum(scores)
+    top_score = max(scores)
+    top_avg_prob_ratio = (top_score / total_score) * len(population)
+
+    stats = {
         "mean": mean_fitness,
         "std": std_fitness,
+        "variance": variance,
         "worst_fitness": worst_fitness,
         "fitness_range": fitness_range,
-        "worst_candidate": population[-1]
+        "worst_candidate": population[-1],
+        "top_avg_prob_ratio": top_avg_prob_ratio
     }
+    return stats
 
 # measures how long things take each generation
 def compute_timing_metrics(generation_start_cpu, overall_start_wall):
@@ -193,11 +216,11 @@ def compute_timing_metrics(generation_start_cpu, overall_start_wall):
     current_wall = time.time()
     generation_cpu_time = current_cpu - generation_start_cpu
     elapsed_time = current_wall - overall_start_wall
-    
+
     # Get raw clock ticks for this generation
     raw_ticks = time.perf_counter_ns()  # Get raw nanosecond ticks
     ticks_per_second = time.get_clock_info('perf_counter').resolution
-    
+
     return {
         "generation_cpu_time": generation_cpu_time,
         "elapsed_time": elapsed_time,
@@ -318,10 +341,10 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate, population_
             termination_reason = "time_limit"
             converged_generation = iteration
             break
-            
+
         generation_start_cpu = time.process_time()
         generation_start_ticks = time.perf_counter_ns()
-        
+
         calc_fitness(population)
         sort_by_fitness(population)
 
@@ -330,10 +353,10 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate, population_
 
         print_best(population)
         stats = compute_fitness_statistics(population)
-        print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, "
-              f"std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, "
-              f"range = {stats['fitness_range']}, "
-              f"worst candidate = {stats['worst_candidate'].gene}")
+        print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, variance = {stats['variance']:.2f}, std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
+
+        # new line to report top-average selection probability ratio
+        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}")
 
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
         gen_ticks = time.perf_counter_ns() - generation_start_ticks
@@ -366,7 +389,7 @@ def main():
     random.seed(time.time())
     population, buffer = init_population()
     overall_start_wall = time.time()
-    
+
     # Store the initial raw ticks
     initial_raw_ticks = time.perf_counter_ns()
 
@@ -394,18 +417,19 @@ def main():
         if elapsed_time >= ga_max_runtime:
             print(f"Time limit of {ga_max_runtime} seconds reached after {iteration} generations.")
             break
-            
+
         generation_start_cpu = time.process_time()
         generation_start_ticks = time.perf_counter_ns()
-        
+
         calc_fitness(population)
         sort_by_fitness(population)
         print_best(population)
 
         stats = compute_fitness_statistics(population)
-        print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, std = {stats['std']:.2f}, "
-              f"worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, "
-              f"worst candidate = {stats['worst_candidate'].gene}")
+        print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, variance = {stats['variance']:.2f}, std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
+
+        # new line to report top-average selection probability ratio
+        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}")
 
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
         gen_ticks = time.perf_counter_ns() - generation_start_ticks
