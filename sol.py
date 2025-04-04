@@ -5,14 +5,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # constant params for the genetic algorithm
-ga_popsize = 8000  # large population for better exploration
-ga_maxiter = 500   # maximum iterations to find a good solution
+ga_popsize = 400 # large population for better exploration
+ga_maxiter = 1500   # maximum iterations to find a good solution
 ga_elitrate = 0.10 # top 10% of candidates are kept as elite
 ga_mutationrate = 0.55  # higher mutation rate to escape local optima
 ga_target = "testing string123 diff_chars"  # the string we want to evolve towards
-ga_crossover_method = "single"  # crossover strategy: single, two_point, or uniform
+ga_crossover_method = "two_point"  # crossover strategy: single, two_point, or uniform
 ga_lcs_bonus = 5  # weight factor for lcs in combined fitness
-ga_fitness_mode = "ascii"  # fitness mode: ascii, lcs, or combined
+ga_fitness_mode = "combined"  # fitness mode: ascii, lcs, or combined
 
 # represents one candidate solution in the population
 class Candidate:
@@ -192,9 +192,16 @@ def compute_timing_metrics(generation_start_cpu, overall_start_wall):
     current_wall = time.time()
     generation_cpu_time = current_cpu - generation_start_cpu
     elapsed_time = current_wall - overall_start_wall
+    
+    # Get raw clock ticks for this generation
+    raw_ticks = time.perf_counter_ns()  # Get raw nanosecond ticks
+    ticks_per_second = time.get_clock_info('perf_counter').resolution
+    
     return {
         "generation_cpu_time": generation_cpu_time,
-        "elapsed_time": elapsed_time
+        "elapsed_time": elapsed_time,
+        "raw_ticks": raw_ticks,
+        "ticks_per_second": ticks_per_second
     }
 
 # plots best, mean, and worst fitness over time
@@ -300,6 +307,8 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate):
 
     for iteration in range(ga_maxiter):
         generation_start_cpu = time.process_time()
+        generation_start_ticks = time.perf_counter_ns()
+        
         calc_fitness(population)
         sort_by_fitness(population)
 
@@ -314,8 +323,11 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate):
               f"worst candidate = {stats['worst_candidate'].gene}")
 
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
+        gen_ticks = time.perf_counter_ns() - generation_start_ticks
         print(f"generation {iteration}: cpu time = {timing['generation_cpu_time']:.4f} s, "
-              f"elapsed time = {timing['elapsed_time']:.4f} s")
+              f"elapsed time = {timing['elapsed_time']:.4f} s, "
+              f"raw ticks = {gen_ticks}, "
+              f"tick time = {gen_ticks/1e9:.6f} s")
 
         mean_history.append(stats['mean'])
         worst_history.append(stats['worst_fitness'])
@@ -339,6 +351,9 @@ def main():
     random.seed(time.time())
     population, buffer = init_population()
     overall_start_wall = time.time()
+    
+    # Store the initial raw ticks
+    initial_raw_ticks = time.perf_counter_ns()
 
     best_history = []
     mean_history = []
@@ -357,6 +372,8 @@ def main():
 
     for iteration in range(ga_maxiter):
         generation_start_cpu = time.process_time()
+        generation_start_ticks = time.perf_counter_ns()
+        
         calc_fitness(population)
         sort_by_fitness(population)
         print_best(population)
@@ -367,8 +384,11 @@ def main():
               f"worst candidate = {stats['worst_candidate'].gene}")
 
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
+        gen_ticks = time.perf_counter_ns() - generation_start_ticks
         print(f"generation {iteration}: cpu time = {timing['generation_cpu_time']:.4f} s, "
-              f"elapsed time = {timing['elapsed_time']:.4f} s")
+              f"elapsed time = {timing['elapsed_time']:.4f} s, "
+              f"raw ticks = {gen_ticks}, "
+              f"tick time = {gen_ticks/1e9:.6f} s")
 
         best_history.append(population[0].fitness)
         mean_history.append(stats['mean'])
