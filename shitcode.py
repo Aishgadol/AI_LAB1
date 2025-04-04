@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from sol import run_ga  # adjust if your GA code file is named differently
 
-def bullshit_func():
+def my_tester_func():
     """
     tests multiple parameter combinations for the ga and produces
     a single figure with 3 subplots (one per crossover method).
@@ -33,7 +33,8 @@ def bullshit_func():
                         crossover_method=method,
                         fitness_mode=fm,
                         lcs_bonus=lb,
-                        mutation_rate=mr
+                        mutation_rate=mr,
+                        population_size=4000
                     )
 
                     # store results along with metadata
@@ -93,4 +94,4 @@ def bullshit_func():
     print("\nplot displayed. testing script is complete.")
 
 if __name__ == "__main__":
-    bullshit_func()
+    my_tester_func()

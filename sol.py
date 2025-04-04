@@ -5,14 +5,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # constant params for the genetic algorithm
-ga_popsize = 400 # large population for better exploration
+ga_popsize = 2000 # large population for better exploration
 ga_maxiter = 1500   # maximum iterations to find a good solution
 ga_elitrate = 0.10 # top 10% of candidates are kept as elite
 ga_mutationrate = 0.55  # higher mutation rate to escape local optima
 ga_target = "testing string123 diff_chars"  # the string we want to evolve towards
 ga_crossover_method = "two_point"  # crossover strategy: single, two_point, or uniform
 ga_lcs_bonus = 5  # weight factor for lcs in combined fitness
-ga_fitness_mode = "combined"  # fitness mode: ascii, lcs, or combined
+ga_fitness_mode = "lcs"  # fitness mode: ascii, lcs, or combined
+ga_max_runtime = 120  # maximum runtime in seconds (2 minutes)
 
 # represents one candidate solution in the population
 class Candidate:
@@ -280,19 +281,21 @@ def plot_fitness_boxplots(fitness_distributions):
     plt.show()
 
 # runs the ga with the given parameters and returns stats
-def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate):
+def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate, population_size=2000, max_runtime=120):
     """
     runs the ga with the specified settings, returns:
       {
         "best_fitness_history": [...],
-        "converged_generation": int
+        "converged_generation": int,
+        "termination_reason": str
       }
     """
-    global ga_crossover_method, ga_fitness_mode, ga_lcs_bonus, ga_mutationrate
+    global ga_crossover_method, ga_fitness_mode, ga_lcs_bonus, ga_mutationrate, ga_popsize
     ga_crossover_method = crossover_method
     ga_fitness_mode = fitness_mode
     ga_lcs_bonus = lcs_bonus
     ga_mutationrate = mutation_rate
+    ga_popsize = population_size
 
     random.seed(time.time())
     population, buffer = init_population()
@@ -304,8 +307,18 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate):
     fitness_distributions = []
 
     converged_generation = ga_maxiter
+    termination_reason = "max_iterations"
 
     for iteration in range(ga_maxiter):
+        # Check if we've exceeded the time limit
+        current_time = time.time()
+        elapsed_time = current_time - overall_start_wall
+        if elapsed_time >= max_runtime:
+            print(f"Time limit of {max_runtime} seconds reached after {iteration} generations.")
+            termination_reason = "time_limit"
+            converged_generation = iteration
+            break
+            
         generation_start_cpu = time.process_time()
         generation_start_ticks = time.perf_counter_ns()
         
@@ -335,6 +348,7 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate):
 
         if best_f == 0:
             print("target reached!")
+            termination_reason = "solution_found"
             converged_generation = iteration
             break
 
@@ -343,7 +357,8 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate):
 
     return {
         "best_fitness_history": best_history,
-        "converged_generation": converged_generation
+        "converged_generation": converged_generation,
+        "termination_reason": termination_reason
     }
 
 # main function for a single run; can comment out plots if you want
@@ -370,7 +385,16 @@ def main():
     else:
         print(f"using fitness mode: {ga_fitness_mode}")
 
+    print(f"Maximum runtime set to {ga_max_runtime} seconds")
+
     for iteration in range(ga_maxiter):
+        # Check if we've exceeded the time limit
+        current_time = time.time()
+        elapsed_time = current_time - overall_start_wall
+        if elapsed_time >= ga_max_runtime:
+            print(f"Time limit of {ga_max_runtime} seconds reached after {iteration} generations.")
+            break
+            
         generation_start_cpu = time.process_time()
         generation_start_ticks = time.perf_counter_ns()
         
@@ -402,9 +426,13 @@ def main():
         mate(population, buffer)
         population, buffer = swap(population, buffer)
 
+    final_time = time.time() - overall_start_wall
+    print(f"Total runtime: {final_time:.2f} seconds")
+
     # comment out or uncomment these plots as you wish
     plot_fitness_evolution(best_history, mean_history, worst_history)
     plot_fitness_boxplots(fitness_distributions)
 
 if __name__ == "__main__":
     main()
+
