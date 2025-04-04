@@ -131,15 +131,16 @@ def uniform_crossover(parent1, parent2, target_length):
 
 # line ~149
 def roulette_wheel_select(candidates):
-    scores = [1.0 / (1.0 + c.fitness) for c in candidates]
-    total_score = sum(scores)
-    pick = random.random() * total_score
+    inv_fitnesses = [1.0 / (1.0 + c.fitness) for c in candidates]
+    total_inv = sum(inv_fitnesses)
+    probabilities = [inv / total_inv for inv in inv_fitnesses]
+    pick = random.random()
     running_sum = 0.0
-    for i, s in enumerate(scores):
-        running_sum += s
-        if running_sum >= pick:
+    for i, prob in enumerate(probabilities):
+        running_sum += prob
+        if pick <= running_sum:
             return candidates[i]
-    return candidates[-1]  # fallback
+    return candidates[-1]
 
 
 # creates the next generation using selection, crossover, and mutation
@@ -187,17 +188,24 @@ def swap(population, buffer):
 def compute_fitness_statistics(population):
     fitness_values = [cand.fitness for cand in population]
     mean_fitness = sum(fitness_values) / len(fitness_values)
-    variance = sum((f - mean_fitness) ** 2 for f in fitness_values) / len(fitness_values)
+
+    scores = [1.0 / (1.0 + c.fitness) for c in population]
+    avg_score = sum(scores) / len(scores)
+
+    variance = sum((s - avg_score) ** 2 for s in scores) / len(scores)
     std_fitness = math.sqrt(variance)
+
     best_fitness = population[0].fitness
     worst_fitness = population[-1].fitness
     fitness_range = worst_fitness - best_fitness
 
-    # new code to compute top-average selection probability ratio
     scores = [1.0 / (1.0 + c.fitness) for c in population]
     total_score = sum(scores)
-    top_score = max(scores)
-    top_avg_prob_ratio = (top_score / total_score) * len(population)
+    top_size = max(1, int(ga_elitrate * len(population)))
+    top_scores = scores[:top_size]
+    avg_top_score = sum(top_scores) / top_size
+    avg_score = total_score / len(population)
+    top_avg_prob_ratio = avg_top_score / avg_score
 
     stats = {
         "mean": mean_fitness,
