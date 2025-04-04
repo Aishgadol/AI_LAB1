@@ -188,13 +188,8 @@ def swap(population, buffer):
 def compute_fitness_statistics(population):
     fitness_values = [cand.fitness for cand in population]
     mean_fitness = sum(fitness_values) / len(fitness_values)
-
-    scores = [1.0 / (1.0 + c.fitness) for c in population]
-    avg_score = sum(scores) / len(scores)
-
-    variance = sum((s - avg_score) ** 2 for s in scores) / len(scores)
+    variance = sum((f - mean_fitness) ** 2 for f in fitness_values) / (len(fitness_values)-1)
     std_fitness = math.sqrt(variance)
-
     best_fitness = population[0].fitness
     worst_fitness = population[-1].fitness
     fitness_range = worst_fitness - best_fitness
