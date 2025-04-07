@@ -4,37 +4,37 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-# constant params for the genetic algorithm
-ga_popsize = 400 # large population for better exploration
-ga_maxiter = 150   # maximum iterations to find a good solution
-ga_elitrate = 0.10 # top 10% of candidates are kept as elite
-ga_mutationrate = 0.55  # higher mutation rate to escape local optima
-ga_target = "testing string123 diff_chars"  # the string we want to evolve towards
-ga_crossover_method = "two_point"  # crossover strategy: single, two_point, or uniform
-ga_lcs_bonus = 5  # weight factor for lcs in combined fitness
-ga_fitness_mode = "ascii"  # fitness mode: ascii, lcs, or combined
-ga_max_runtime = 120  # maximum runtime in seconds (2 minutes)
-ga_distance_metric = "ulam"  # distance metric: levenshtein or ulam
+# constant params for genetic algorithm optimization
+ga_popsize = 400 # large population enhances exploration capability
+ga_maxiter = 150   # maximum number of generations to evolve solution
+ga_elitrate = 0.10 # percentage of top candidates preserved each generation
+ga_mutationrate = 0.55  # higher mutation increases exploration but may slow convergence
+ga_target = "testing string123 diff_chars"  # target string for evolutionary convergence
+ga_crossover_method = "two_point"  # genetic recombination strategy for offspring creation
+ga_lcs_bonus = 5  # weight factor for longest common subsequence in fitness calculation
+ga_fitness_mode = "ascii"  # method for evaluating candidate fitness
+ga_max_runtime = 120  # maximum execution time in seconds to prevent excessive computation
+ga_distance_metric = "ulam"  # algorithm for measuring sequence dissimilarity
 
-# represents one candidate solution in the population
+# encapsulates a potential solution with its genetic representation and quality score
 class Candidate:
     def __init__(self, gene, fitness=0):
-        self.gene = gene  # holds the string
-        self.fitness = fitness  # lower is better
+        self.gene = gene  # string representation of candidate solution
+        self.fitness = fitness  # fitness score (lower values indicate better solutions)
 
-# sets up a random population and a buffer for the next generation
+# creates initial random population with specified genetic characteristics
 def init_population():
     target_length = len(ga_target)
     population = []
     for _ in range(ga_popsize):
-        # build a random gene from ascii 32 to 121
+        # generate random candidate using printable ascii character range
         gene = ''.join(chr(random.randint(32, 121)) for _ in range(target_length))
         population.append(Candidate(gene))
-    # buffer is empty at first, same size
+    # allocate memory for next generation storage
     buffer = [Candidate('', 0) for _ in range(ga_popsize)]
     return population, buffer
 
-# calculates longest common subsequence length (str1, str2)
+# identifies longest common subsequence between two strings using dynamic programming
 def longest_common_subsequence(str1, str2):
     m, n = len(str1), len(str2)
     dp = [[0] * (n + 1) for _ in range(m + 1)]
@@ -46,39 +46,49 @@ def longest_common_subsequence(str1, str2):
                 dp[i][j] = max(dp[i-1][j], dp[i][j-1])
     return dp[m][n]
 
+# calculates minimum edit distance between strings using dynamic programming
 def levenshtein_distance(str1, str2):
     # get lengths of both strings
     len_str1, len_str2 = len(str1), len(str2)
-    # create dp table for edit distances
+    # initialize dynamic programming matrix for edit operations
     dp = [[0] * (len_str2 + 1) for _ in range(len_str1 + 1)]
-    # initialize dp table for deletions (empty second string)
+    # initialize first row for empty string to target transformations
     for i in range(len_str1 + 1):
         dp[i][0] = i
-    # initialize dp table for insertions (empty first string)
+    # initialize first column for source to empty string transformations
     for j in range(len_str2 + 1):
         dp[0][j] = j
-    # fill dp table with min edit operations
+    # fill dp table with minimum edit operations for each substring pair
     for i in range(1, len_str1 + 1):
         for j in range(1, len_str2 + 1):
-            # cost is 0 if characters match, else 1
+            # determine substitution cost based on character equality
             cost = 0 if str1[i - 1] == str2[j - 1] else 1
             dp[i][j] = min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
-    # return computed levenshtein distance
+    # return final cell containing complete edit distance
     return dp[len_str1][len_str2]
 
+# computes number of positions where corresponding elements differ in equal-length sequences
+def different_alleles(str1, str2):
+    # ensure inputs have equal length for valid hamming distance calculation
+    if len(str1) != len(str2):
+        raise ValueError("strings must have equal length for different_alleles calculation")
+    # count positions with differing characters
+    return sum(c1 != c2 for c1, c2 in zip(str1, str2))
+
+# calculates permutation distance using longest increasing subsequence approach
 def ulam_distance(s1, s2):
     if len(s1) != len(s2):
         raise ValueError("strings must be of equal length")
         
-    # Check if both strings have the same set of characters
+    # check if strings contain identical character sets for permutation analysis
     if set(s1) != set(s2):
-        return levenshtein_distance(s1, s2), True  # Return the distance and signal fallback
+        return levenshtein_distance(s1, s2), True  # fallback to edit distance if not permutations
         
-    #map each character in s2 to its index
+    # map characters in s2 to their respective indices
     index_map = {char: idx for idx, char in enumerate(s2)}
-    #convert s1 into a list of indices based on s2's ordering
+    # convert s1 into positional representation based on s2's ordering
     mapped_indices = [index_map[char] for char in s1]
-    #helper function to perform binary search for first index in lst that is >= value
+    # efficient binary search for longest increasing subsequence construction
     def find_position(lst, value):
         lo = 0
         hi = len(lst)
@@ -89,36 +99,35 @@ def ulam_distance(s1, s2):
             else:
                 hi = mid
         return lo
-    #initialize list to hold the tails of increasing subsequences
+    # storage for longest increasing subsequence endpoints
     lis_tails = []
-    #compute the longest increasing subsequence using manual binary search
+    # greedy algorithm to compute longest increasing subsequence length
     for num in mapped_indices:
         pos = find_position(lis_tails, num)
         if pos == len(lis_tails):
-            lis_tails.append(num)  #extend current subsequence
+            lis_tails.append(num)  # extend current subsequence with new element
         else:
-            lis_tails[pos] = num   #replace element to maintain lowest tail
-    return len(s1) - len(lis_tails), False  # Return the distance and no fallback
+            lis_tails[pos] = num   # replace element to maintain optimal subsequence growth
+    return len(s1) - len(lis_tails), False  # distance = length - LIS length
 
-
-# calculates fitness for each candidate based on mode
+# evaluates fitness of each candidate based on selected distance metric
 def calc_fitness(population):
     target = ga_target
     target_length = len(target)
     for candidate in population:
         if ga_fitness_mode == "ascii":
-            # sum of ascii differences between gene and target
+            # aggregate character-wise ascii code differences
             fitness = 0
             for i in range(target_length):
                 fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
 
         elif ga_fitness_mode == "lcs":
-            # lcs-based fitness (longer lcs -> better, so invert by subtracting)
+            # inverse length of longest common subsequence as fitness score
             lcs_length = longest_common_subsequence(candidate.gene, target)
             fitness = target_length - lcs_length
 
         elif ga_fitness_mode == "combined":
-            # adds ascii difference and a weighted lcs difference
+            # weighted combination of ascii differences and lcs-based score
             ascii_fitness = 0
             for i in range(target_length):
                 ascii_fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
@@ -127,23 +136,23 @@ def calc_fitness(population):
             fitness = ascii_fitness + ga_lcs_bonus * lcs_fitness
 
         else:
-            # fallback to ascii difference
+            # default fallback to character-level difference measurement
             fitness = 0
             for i in range(target_length):
                 fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
 
         candidate.fitness = fitness
 
-# sorts the population by fitness ascending
+# arranges population in ascending order of fitness for selection and elitism
 def sort_by_fitness(population):
     population.sort(key=lambda cand: cand.fitness)
 
-# copies the top elite_size candidates directly into the next gen
+# preserves genetic material of top-performing individuals for next generation
 def elitism(population, buffer, elite_size):
     for i in range(elite_size):
         buffer[i] = Candidate(population[i].gene, population[i].fitness)
 
-# randomly mutate a single character in the candidate's gene
+# introduces random variation in genetic material to explore solution space
 def mutate(candidate):
     target_length = len(ga_target)
     pos = random.randint(0, target_length - 1)
@@ -154,14 +163,14 @@ def mutate(candidate):
     gene_list[pos] = chr(new_val)
     candidate.gene = ''.join(gene_list)
 
-# single-point crossover
+# recombines genetic material at a single point to create new offspring
 def single_point_crossover(parent1, parent2, target_length):
     crossover_point = random.randint(0, target_length - 1)
     child1 = parent1.gene[:crossover_point] + parent2.gene[crossover_point:]
     child2 = parent2.gene[:crossover_point] + parent1.gene[crossover_point:]
     return child1, child2
 
-# two-point crossover
+# exchanges genetic material between two breakpoints for enhanced diversity
 def two_point_crossover(parent1, parent2, target_length):
     point1, point2 = sorted(random.sample(range(target_length), 2))
     child1 = (parent1.gene[:point1] +
@@ -172,7 +181,7 @@ def two_point_crossover(parent1, parent2, target_length):
               parent2.gene[point2:])
     return child1, child2
 
-# uniform crossover (each char chosen from one parent at random)
+# mixes parental genes at character level with 50% probability for each position
 def uniform_crossover(parent1, parent2, target_length):
     child1_gene = []
     child2_gene = []
@@ -185,7 +194,7 @@ def uniform_crossover(parent1, parent2, target_length):
             child2_gene.append(parent1.gene[i])
     return ''.join(child1_gene), ''.join(child2_gene)
 
-# line ~149
+# selects individuals proportionally to fitness using probability-based sampling
 def roulette_wheel_select(candidates):
     inv_fitnesses = [1.0 / (1.0 + c.fitness) for c in candidates]
     total_inv = sum(inv_fitnesses)
@@ -198,8 +207,7 @@ def roulette_wheel_select(candidates):
             return candidates[i]
     return candidates[-1]
 
-
-# creates the next generation using selection, crossover, and mutation
+# produces next generation through selection, recombination and mutation
 def mate(population, buffer):
     elite_size = int(ga_popsize * ga_elitrate)
     target_length = len(ga_target)
@@ -225,22 +233,22 @@ def mate(population, buffer):
         if random.random() < ga_mutationrate:
             mutate(buffer[i + 1])
 
-    # handle odd population edge case
+    # handle special case for odd population size to maintain consistent generation size
     if ga_popsize % 2 == 1 and elite_size % 2 == 0:
         buffer[-1] = Candidate(buffer[-2].gene)
         if random.random() < ga_mutationrate:
             mutate(buffer[-1])
 
-# prints the best candidate (lowest fitness)
+# displays current best solution and its fitness score
 def print_best(population):
     best = population[0]
     print(f"best: {best.gene} ({best.fitness})")
 
-# swaps population and buffer references
+# exchanges population and buffer references to advance to next generation
 def swap(population, buffer):
     return buffer, population
 
-# calculates some stats: mean, std, etc
+# collects statistical measures of population fitness distribution
 def compute_fitness_statistics(population):
     fitness_values = [cand.fitness for cand in population]
     mean_fitness = sum(fitness_values) / len(fitness_values)
@@ -274,15 +282,15 @@ def compute_fitness_statistics(population):
     }
     return stats
 
-# measures how long things take each generation
+# records execution time metrics for performance analysis
 def compute_timing_metrics(generation_start_cpu, overall_start_wall):
     current_cpu = time.process_time()
     current_wall = time.time()
     generation_cpu_time = current_cpu - generation_start_cpu
     elapsed_time = current_wall - overall_start_wall
 
-    # Get raw clock ticks for this generation
-    raw_ticks = time.perf_counter_ns()  # Get raw nanosecond ticks
+    # capture high-resolution timing data for detailed performance evaluation
+    raw_ticks = time.perf_counter_ns()  # nanosecond precision counter
     ticks_per_second = time.get_clock_info('perf_counter').resolution
 
     return {
@@ -292,7 +300,7 @@ def compute_timing_metrics(generation_start_cpu, overall_start_wall):
         "ticks_per_second": ticks_per_second
     }
 
-# New function to calculate average population distance
+# quantifies genetic diversity through average distance between population members
 def calculate_avg_population_distance(population, distance_metric="levenshtein"):
     """
     Calculate the average pairwise distance between population members.
@@ -309,21 +317,21 @@ def calculate_avg_population_distance(population, distance_metric="levenshtein")
     count = 0
     used_levenshtein_fallback = False
     
-    # Sample a subset if population is large to avoid excessive computation
+    # limit computational complexity for large populations with sampling
     pop_size = len(population)
-    sample_size = min(50, pop_size)  # Cap at 50 candidates to avoid O(n²) performance issues
+    sample_size = min(50, pop_size)  # prevent quadratic complexity issues with large populations
     
     if pop_size <= sample_size:
         sample = population
     else:
-        # Sample randomly but include some of the best candidates
-        elite_size = max(1, int(0.1 * sample_size))  # Include top 10% of the sample
+        # stratified sampling to include elite members and random others
+        elite_size = max(1, int(0.1 * sample_size))  # preserve top performers in sample
         sample = population[:elite_size] + random.sample(population[elite_size:], sample_size - elite_size)
     
     for i in range(len(sample)):
         for j in range(i + 1, len(sample)):
             if distance_metric == "ulam":
-                # For Ulam distance, ensure strings are of same length
+                # ulam distance requires permutation constraints verification
                 if len(sample[i].gene) == len(sample[j].gene):
                     try:
                         distance, fallback = ulam_distance(sample[i].gene, sample[j].gene)
@@ -336,13 +344,13 @@ def calculate_avg_population_distance(population, distance_metric="levenshtein")
                     distance = levenshtein_distance(sample[i].gene, sample[j].gene)
                     used_levenshtein_fallback = True
             else:
-                # Default to levenshtein
+                # default distance metric for sequence comparison
                 distance = levenshtein_distance(sample[i].gene, sample[j].gene)
             
             total_distance += distance
             count += 1
     
-    # If we had to fall back to Levenshtein, update the global metric
+    # update global metric if requirements for specialized metric weren't met
     if used_levenshtein_fallback and distance_metric == "ulam":
         ga_distance_metric = "levenshtein"
         print("Warning: Had to fall back to Levenshtein distance because Ulam conditions were not met")
@@ -352,7 +360,7 @@ def calculate_avg_population_distance(population, distance_metric="levenshtein")
     
     return total_distance / count, ga_distance_metric
 
-# plots best, mean, and worst fitness over time
+# visualizes fitness trends across generations for convergence analysis
 def plot_fitness_evolution(best_history, mean_history, worst_history):
     generations = list(range(len(best_history)))
     plt.figure(figsize=(12, 6))
@@ -366,7 +374,7 @@ def plot_fitness_evolution(best_history, mean_history, worst_history):
     plt.grid(True)
     plt.show()
 
-# plots a series of boxplots for fitness distributions across generations
+# displays fitness distribution changes through progressive generations
 def plot_fitness_boxplots(fitness_distributions):
     plt.figure(figsize=(14, 8))
     flierprops = dict(marker='D', markersize=4, linestyle='none', markeredgecolor='blue')
@@ -377,7 +385,7 @@ def plot_fitness_boxplots(fitness_distributions):
 
     total = len(fitness_distributions)
     if total > 10:
-        # sample 10 points evenly
+        # sample evenly distributed generations for readable visualization
         indices = [int(round(i * (total - 1) / 9)) for i in range(10)]
         sampled_distributions = [fitness_distributions[i] for i in indices]
         xtick_labels = [str(i) for i in indices]
@@ -401,7 +409,7 @@ def plot_fitness_boxplots(fitness_distributions):
     plt.xticks(range(1, len(indices) + 1), xtick_labels)
     plt.grid(True)
 
-    # annotate boxplots with quartiles and whiskers
+    # annotate statistical elements for enhanced interpretability
     for i, data in enumerate(sampled_distributions):
         x = i + 1
         q1 = np.percentile(data, 25)
@@ -427,7 +435,7 @@ def plot_fitness_boxplots(fitness_distributions):
 
     plt.show()
 
-# runs the ga with the given parameters and returns stats
+# executes genetic algorithm with configuration parameters and returns performance metrics
 def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate, 
            population_size=2000, max_runtime=120, distance_metric="levenshtein"):
     """
@@ -459,7 +467,7 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
     termination_reason = "max_iterations"
 
     for iteration in range(ga_maxiter):
-        # Check if we've exceeded the time limit
+        # enforce runtime constraints to prevent excessive computation
         current_time = time.time()
         elapsed_time = current_time - overall_start_wall
         if elapsed_time >= max_runtime:
@@ -480,7 +488,7 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
         print_best(population)
         stats = compute_fitness_statistics(population)
         
-        # Calculate average population distance
+        # evaluate population diversity through distance metrics
         avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
         
         print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
@@ -512,13 +520,13 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
         "termination_reason": termination_reason
     }
 
-# main function for a single run; can comment out plots if you want
+# core execution function for evolutionary algorithm with visualization
 def main():
     random.seed(time.time())
     population, buffer = init_population()
     overall_start_wall = time.time()
 
-    # Store the initial raw ticks
+    # capture initial timing reference for performance measurement
     initial_raw_ticks = time.perf_counter_ns()
 
     best_history = []
@@ -540,7 +548,7 @@ def main():
     print(f"Using {ga_distance_metric} distance metric for population diversity")
 
     for iteration in range(ga_maxiter):
-        # Check if we've exceeded the time limit
+        # enforce computational budget constraints through runtime monitoring
         current_time = time.time()
         elapsed_time = current_time - overall_start_wall
         if elapsed_time >= ga_max_runtime:
@@ -556,7 +564,7 @@ def main():
 
         stats = compute_fitness_statistics(population)
         
-        # Calculate average population distance
+        # measure genetic diversity within current population
         avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
         
         print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
@@ -584,10 +592,9 @@ def main():
     final_time = time.time() - overall_start_wall
     print(f"Total runtime: {final_time:.2f} seconds")
 
-    # comment out or uncomment these plots as you wish
+    # visualization for fitness evolution analysis and distribution understanding
     plot_fitness_evolution(best_history, mean_history, worst_history)
     plot_fitness_boxplots(fitness_distributions)
 
 if __name__ == "__main__":
     main()
-
