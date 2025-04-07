@@ -10,11 +10,11 @@ ga_maxiter = 150   # maximum number of generations to evolve solution
 ga_elitrate = 0.10 # percentage of top candidates preserved each generation
 ga_mutationrate = 0.55  # higher mutation increases exploration but may slow convergence
 ga_target = "testing string123 diff_chars"  # target string for evolutionary convergence
-ga_crossover_method = "two_point"  # genetic recombination strategy for offspring creation
+ga_crossover_method = "two_point"  #"single", "two_point", "uniform" genetic recombination strategy for offspring creation
 ga_lcs_bonus = 5  # weight factor for longest common subsequence in fitness calculation
-ga_fitness_mode = "ascii"  # method for evaluating candidate fitness
+ga_fitness_mode = "combined"  #"ascii", "lcs", "combined" method for evaluating candidate fitness
 ga_max_runtime = 120  # maximum execution time in seconds to prevent excessive computation
-ga_distance_metric = "ulam"  # algorithm for measuring sequence dissimilarity
+ga_distance_metric = "levenshtein"  # "ulam" or "levenshtein", measuring sequence dissimilarity
 
 # encapsulates a potential solution with its genetic representation and quality score
 class Candidate:
@@ -491,6 +491,18 @@ def plot_fitness_boxplots(fitness_distributions):
 
     plt.show()
 
+# visualizes entropy change over generations
+def plot_entropy_evolution(entropy_history):
+    generations = list(range(len(entropy_history)))
+    plt.figure(figsize=(12, 6))
+    plt.plot(generations, entropy_history, label="Shannon Entropy", linewidth=2, color='purple')
+    plt.xlabel("Generation")
+    plt.ylabel("Average Shannon Entropy")
+    plt.title("Population Diversity: Shannon Entropy per Generation")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
 # executes genetic algorithm with configuration parameters and returns performance metrics
 def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate, 
            population_size=2000, max_runtime=120, distance_metric="levenshtein"):
@@ -499,7 +511,8 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
       {
         "best_fitness_history": [...],
         "converged_generation": int,
-        "termination_reason": str
+        "termination_reason": str,
+        "entropy_history": [...]
       }
     """
     global ga_crossover_method, ga_fitness_mode, ga_lcs_bonus, ga_mutationrate, ga_popsize, ga_distance_metric
@@ -518,6 +531,7 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
     mean_history = []
     worst_history = []
     fitness_distributions = []
+    entropy_history = []  # Add list to track entropy history
 
     converged_generation = ga_maxiter
     termination_reason = "max_iterations"
@@ -552,6 +566,7 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
         
         # calculate average Shannon entropy
         avg_shannon_entropy = calculate_avg_shannon_entropy(population)
+        entropy_history.append(avg_shannon_entropy)  # Store entropy value
         
         print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
         print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}, avg different alleles = {avg_diff_alleles:.2f}, avg Shannon entropy = {avg_shannon_entropy:.4f}")
@@ -579,7 +594,8 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
     return {
         "best_fitness_history": best_history,
         "converged_generation": converged_generation,
-        "termination_reason": termination_reason
+        "termination_reason": termination_reason,
+        "entropy_history": entropy_history  # Return entropy history
     }
 
 # core execution function for evolutionary algorithm with visualization
@@ -595,6 +611,7 @@ def main():
     mean_history = []
     worst_history = []
     fitness_distributions = []
+    entropy_history = []  # Add list to track entropy history
 
     if ga_crossover_method not in ["single", "two_point", "uniform"]:
         print("no crossover operator detected, using single-point crossover by default.")
@@ -634,6 +651,7 @@ def main():
         
         # calculate average Shannon entropy
         avg_shannon_entropy = calculate_avg_shannon_entropy(population)
+        entropy_history.append(avg_shannon_entropy)  # Store entropy value
         
         print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
         print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}, avg different alleles = {avg_diff_alleles:.2f}, avg Shannon entropy = {avg_shannon_entropy:.4f}")
@@ -663,6 +681,7 @@ def main():
     # visualization for fitness evolution analysis and distribution understanding
     plot_fitness_evolution(best_history, mean_history, worst_history)
     plot_fitness_boxplots(fitness_distributions)
+    plot_entropy_evolution(entropy_history)  # Add entropy evolution plot
 
 if __name__ == "__main__":
     main()
