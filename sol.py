@@ -75,18 +75,18 @@ def different_alleles(str1, str2):
     # count positions with differing characters
     return sum(c1 != c2 for c1, c2 in zip(str1, str2))
 
-# calculates the average number of different alleles between pairs in the population
+# calculate the average number of different alleles between pairs in the population
 def calculate_avg_different_alleles(population):
     total_diff = 0
     count = 0
     
-    # For each unique pair in the population
+    #for each unique pair in the population
     for i in range(len(population)):
-        for j in range(i + 1, len(population)):  # Start from i+1 to avoid repeating pairs
+        for j in range(i + 1, len(population)):  #start from i+1 to avoid repeating pairs
             total_diff += different_alleles(population[i].gene, population[j].gene)
             count += 1
     
-    # Avoid division by zero if population has 0 or 1 members
+    # avoid division by zero if population has 0 or 1 members
     if count == 0:
         return 0
     
