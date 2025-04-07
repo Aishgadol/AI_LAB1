@@ -1,7 +1,7 @@
 import random
 import time
 import math
-import numpy as np
+import numpy np
 import matplotlib.pyplot as plt
 
 # constant params for genetic algorithm optimization
@@ -377,6 +377,46 @@ def calculate_avg_population_distance(population, distance_metric="levenshtein")
     
     return total_distance / count, ga_distance_metric
 
+# calculates the Shannon entropy for a gene string
+def calculate_shannon_entropy(gene):
+    # Count character frequencies
+    char_count = {}
+    for char in gene:
+        if char in char_count:
+            char_count[char] += 1
+        else:
+            char_count[char] = 1
+    
+    # Calculate entropy using the formula: -sum(p_i * log2(p_i))
+    length = len(gene)
+    entropy = 0.0
+    
+    for count in char_count.values():
+        probability = count / length
+        entropy -= probability * math.log2(probability)
+    
+    return entropy
+
+# calculates the average Shannon entropy across the population
+def calculate_avg_shannon_entropy(population):
+    char_count = {}
+    total_chars = 0
+    # build global character frequency for entire population
+    for candidate in population:
+        for c in candidate.gene:
+            char_count[c] = char_count.get(c, 0) + 1
+            total_chars += 1
+
+    if total_chars == 0:
+        return 0.0
+
+    entropy = 0.0
+    for count in char_count.values():
+        p = count / total_chars
+        entropy -= p * math.log2(p)
+
+    return entropy
+
 # visualizes fitness trends across generations for convergence analysis
 def plot_fitness_evolution(best_history, mean_history, worst_history):
     generations = list(range(len(best_history)))
@@ -511,8 +551,11 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
         # calculate average different alleles
         avg_diff_alleles = calculate_avg_different_alleles(population)
         
+        # calculate average Shannon entropy
+        avg_shannon_entropy = calculate_avg_shannon_entropy(population)
+        
         print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
-        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}, avg different alleles = {avg_diff_alleles:.2f}")
+        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}, avg different alleles = {avg_diff_alleles:.2f}, avg Shannon entropy = {avg_shannon_entropy:.4f}")
 
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
         gen_ticks = time.perf_counter_ns() - generation_start_ticks
@@ -590,8 +633,11 @@ def main():
         # calculate average different alleles
         avg_diff_alleles = calculate_avg_different_alleles(population)
         
+        # calculate average Shannon entropy
+        avg_shannon_entropy = calculate_avg_shannon_entropy(population)
+        
         print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
-        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}, avg different alleles = {avg_diff_alleles:.2f}")
+        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}, avg different alleles = {avg_diff_alleles:.2f}, avg Shannon entropy = {avg_shannon_entropy:.4f}")
 
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
         gen_ticks = time.perf_counter_ns() - generation_start_ticks
