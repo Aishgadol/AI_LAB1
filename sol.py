@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # constant params for genetic algorithm optimization
-ga_popsize = 400 # large population enhances exploration capability
+ga_popsize = 500 # large population enhances exploration capability
 ga_maxiter = 150   # maximum number of generations to evolve solution
 ga_elitrate = 0.10 # percentage of top candidates preserved each generation
 ga_mutationrate = 0.55  # higher mutation increases exploration but may slow convergence
@@ -427,7 +427,7 @@ def plot_fitness_boxplots(fitness_distributions):
     boxprops = dict(facecolor='lightblue', color='blue', linewidth=1.5)
     whiskerprops = dict(color='blue', linewidth=1.5)
     capprops = dict(color='blue', linewidth=1.5)
-    medianprops = dict(color='red', linewidth=2)
+    medianprops = dict(color='red', linewidth=1)
 
     total = len(fitness_distributions)
     if total > 10:
@@ -481,16 +481,52 @@ def plot_fitness_boxplots(fitness_distributions):
 
     plt.show()
 
-# visualizes entropy change over generations
-def plot_entropy_evolution(entropy_history):
+# visualizes entropy change over generations along with other diversity metrics
+def plot_entropy_evolution(entropy_history, allele_diff_history, distance_history):
     generations = list(range(len(entropy_history)))
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(14, 8))
+    
+    # Plot all three diversity metrics with distinct colors
     plt.plot(generations, entropy_history, label="Shannon Entropy", linewidth=2, color='purple')
+    plt.plot(generations, allele_diff_history, label="Avg Different Alleles", linewidth=2, color='red')
+    plt.plot(generations, distance_history, label="Avg Levenshtein Distance", linewidth=2, color='blue')
+    
+    # Add labels at 10 evenly spaced points
+    if len(generations) > 1:
+        label_points = [int(i * (len(generations) - 1) / 9) for i in range(10)]
+        
+        for idx in label_points:
+            # Vertical offset for each metric to prevent overlapping text
+            plt.annotate(f"Entropy: {entropy_history[idx]:.2f}", 
+                         (idx, entropy_history[idx]), 
+                         textcoords="offset points", 
+                         xytext=(0,10), 
+                         ha='center',
+                         color='purple',
+                         fontsize=8)
+            
+            plt.annotate(f"Alleles: {allele_diff_history[idx]:.2f}", 
+                         (idx, allele_diff_history[idx]), 
+                         textcoords="offset points", 
+                         xytext=(0,-15), 
+                         ha='center',
+                         color='red',
+                         fontsize=8)
+            
+            plt.annotate(f"Levenshtein: {distance_history[idx]:.2f}", 
+                         (idx, distance_history[idx]), 
+                         textcoords="offset points", 
+                         xytext=(0,10), 
+                         ha='center',
+                         color='blue',
+                         fontsize=8)
+    
     plt.xlabel("Generation")
-    plt.ylabel("Average Shannon Entropy")
-    plt.title("Population Diversity: Shannon Entropy per Generation")
-    plt.legend()
+    plt.ylabel("Diversity Metrics")
+    plt.title("Population Diversity Metrics per Generation")
+    plt.legend(loc='upper right')
     plt.grid(True)
+    plt.tight_layout()
     plt.show()
 
 # executes genetic algorithm with configuration parameters and returns performance metrics
@@ -502,7 +538,9 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
         "best_fitness_history": [...],
         "converged_generation": int,
         "termination_reason": str,
-        "entropy_history": [...]
+        "entropy_history": [...],
+        "allele_diff_history": [...],
+        "distance_history": [...]
       }
     """
     global ga_crossover_method, ga_fitness_mode, ga_lcs_bonus, ga_mutationrate, ga_popsize, ga_distance_metric
@@ -521,7 +559,9 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
     mean_history = []
     worst_history = []
     fitness_distributions = []
-    entropy_history = []  # Add list to track entropy history
+    entropy_history = []  # Track entropy history
+    allele_diff_history = []  # Track average different alleles history
+    distance_history = []  # Track average Levenshtein distance history
 
     converged_generation = ga_maxiter
     termination_reason = "max_iterations"
@@ -550,9 +590,11 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
         
         # evaluate population diversity through distance metrics
         avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
+        distance_history.append(avg_distance)  # Store average distance
         
         # calculate average different alleles
         avg_diff_alleles = calculate_avg_different_alleles(population)
+        allele_diff_history.append(avg_diff_alleles)  # Store average different alleles
         
         # calculate average Shannon entropy
         avg_shannon_entropy = calculate_avg_shannon_entropy(population)
@@ -585,7 +627,9 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
         "best_fitness_history": best_history,
         "converged_generation": converged_generation,
         "termination_reason": termination_reason,
-        "entropy_history": entropy_history  # Return entropy history
+        "entropy_history": entropy_history,
+        "allele_diff_history": allele_diff_history,
+        "distance_history": distance_history
     }
 
 # core execution function for evolutionary algorithm with visualization
@@ -601,7 +645,9 @@ def main():
     mean_history = []
     worst_history = []
     fitness_distributions = []
-    entropy_history = []  # Add list to track entropy history
+    entropy_history = []  # Track Shannon entropy history
+    allele_diff_history = []  # Track average different alleles history
+    distance_history = []  # Track average Levenshtein distance history
 
     if ga_crossover_method not in ["single", "two_point", "uniform"]:
         print("no crossover operator detected, using single-point crossover by default.")
@@ -635,9 +681,11 @@ def main():
         
         # measure genetic diversity within current population
         avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
+        distance_history.append(avg_distance)  # Store average distance
         
         # calculate average different alleles
         avg_diff_alleles = calculate_avg_different_alleles(population)
+        allele_diff_history.append(avg_diff_alleles)  # Store average different alleles
         
         # calculate average Shannon entropy
         avg_shannon_entropy = calculate_avg_shannon_entropy(population)
@@ -671,7 +719,7 @@ def main():
     # visualization for fitness evolution analysis and distribution understanding
     plot_fitness_evolution(best_history, mean_history, worst_history)
     plot_fitness_boxplots(fitness_distributions)
-    plot_entropy_evolution(entropy_history)  # Add entropy evolution plot
+    plot_entropy_evolution(entropy_history, allele_diff_history, distance_history)  # Plot all diversity metrics together
 
 if __name__ == "__main__":
     main()
