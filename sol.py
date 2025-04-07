@@ -77,17 +77,6 @@ def different_alleles(str1, str2):
 
 # calculates the average number of different alleles between population members and target
 def calculate_avg_different_alleles(population, target):
-    """
-    Calculate the average number of different alleles (characters) between 
-    population members and the target string.
-    
-    Args:
-        population: List of Candidate objects
-        target: Target string
-        
-    Returns:
-        float: Average number of different alleles
-    """
     total_diff = 0
     for candidate in population:
         total_diff += different_alleles(candidate.gene, target)
