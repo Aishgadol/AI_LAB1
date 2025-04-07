@@ -1,7 +1,7 @@
 import random
 import time
 import math
-import numpy np
+import numpy as np
 import matplotlib.pyplot as plt
 
 # constant params for genetic algorithm optimization
@@ -377,38 +377,44 @@ def calculate_avg_population_distance(population, distance_metric="levenshtein")
     
     return total_distance / count, ga_distance_metric
 
-# calculates the Shannon entropy for a gene string
-def calculate_shannon_entropy(gene):
-    # Count character frequencies
-    char_count = {}
-    for char in gene:
-        if char in char_count:
-            char_count[char] += 1
-        else:
-            char_count[char] = 1
-    
-    # Calculate entropy using the formula: -sum(p_i * log2(p_i))
-    length = len(gene)
-    entropy = 0.0
-    
-    for count in char_count.values():
-        probability = count / length
-        entropy -= probability * math.log2(probability)
-    
-    return entropy
-
-# calculates the average Shannon entropy across the population
+# calculates the per-locus shannon entropy across the population
 def calculate_avg_shannon_entropy(population):
-    # Calculate entropy for each gene in the population
-    entropies = []
-    for candidate in population:
-        entropies.append(calculate_shannon_entropy(candidate.gene))
-    
-    # Return the average entropy across all genes
-    if len(entropies) == 0:
+    #check if population is empty to avoid division by zero
+    if not population or len(population) == 0:
         return 0.0
     
-    return sum(entropies) / len(entropies)
+    #get the length of genes from first individual
+    gene_length = len(population[0].gene)
+    
+    #will store entropy values for each position
+    position_entropies = []
+    
+    #calculate entropy at each position in the gene
+    for position in range(gene_length):
+        #grab all characters at current position from everyone
+        position_chars = [candidate.gene[position] for candidate in population]
+        
+        #count how many times each character appears at this position
+        char_count = {}
+        for char in position_chars:
+            if char in char_count:
+                char_count[char] += 1
+            else:
+                char_count[char] = 1
+        
+        #shannon entropy formula: -sum(p_i * log2(p_i))
+        entropy = 0.0
+        population_size = len(population)
+        
+        for count in char_count.values():
+            probability = count / population_size
+            entropy -= probability * math.log2(probability)
+        
+        #add this position's entropy to our collection
+        position_entropies.append(entropy)
+    
+    #return average entropy across all gene positions
+    return sum(position_entropies) / gene_length
 
 # visualizes fitness trends across generations for convergence analysis
 def plot_fitness_evolution(best_history, mean_history, worst_history):
