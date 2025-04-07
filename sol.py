@@ -374,7 +374,6 @@ def calculate_avg_population_distance(population, distance_metric="levenshtein")
     
     if count == 0:
         return 0, ga_distance_metric
-    
     return total_distance / count, ga_distance_metric
 
 # calculates the per-locus shannon entropy across the population
@@ -382,18 +381,14 @@ def calculate_avg_shannon_entropy(population):
     #check if population is empty to avoid division by zero
     if not population or len(population) == 0:
         return 0.0
-    
     #get the length of genes from first individual
     gene_length = len(population[0].gene)
-    
     #will store entropy values for each position
     position_entropies = []
-    
     #calculate entropy at each position in the gene
     for position in range(gene_length):
         #grab all characters at current position from everyone
         position_chars = [candidate.gene[position] for candidate in population]
-        
         #count how many times each character appears at this position
         char_count = {}
         for char in position_chars:
@@ -401,19 +396,14 @@ def calculate_avg_shannon_entropy(population):
                 char_count[char] += 1
             else:
                 char_count[char] = 1
-        
         #shannon entropy formula: -sum(p_i * log2(p_i))
         entropy = 0.0
         population_size = len(population)
-        
         for count in char_count.values():
             probability = count / population_size
             entropy -= probability * math.log2(probability)
-        
         #add this position's entropy to our collection
         position_entropies.append(entropy)
-    
-    #return average entropy across all gene positions
     return sum(position_entropies) / gene_length
 
 # visualizes fitness trends across generations for convergence analysis
