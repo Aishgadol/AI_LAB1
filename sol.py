@@ -399,23 +399,16 @@ def calculate_shannon_entropy(gene):
 
 # calculates the average Shannon entropy across the population
 def calculate_avg_shannon_entropy(population):
-    char_count = {}
-    total_chars = 0
-    # build global character frequency for entire population
+    # Calculate entropy for each gene in the population
+    entropies = []
     for candidate in population:
-        for c in candidate.gene:
-            char_count[c] = char_count.get(c, 0) + 1
-            total_chars += 1
-
-    if total_chars == 0:
+        entropies.append(calculate_shannon_entropy(candidate.gene))
+    
+    # Return the average entropy across all genes
+    if len(entropies) == 0:
         return 0.0
-
-    entropy = 0.0
-    for count in char_count.values():
-        p = count / total_chars
-        entropy -= p * math.log2(p)
-
-    return entropy
+    
+    return sum(entropies) / len(entropies)
 
 # visualizes fitness trends across generations for convergence analysis
 def plot_fitness_evolution(best_history, mean_history, worst_history):
