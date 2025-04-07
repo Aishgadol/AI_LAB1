@@ -75,13 +75,22 @@ def different_alleles(str1, str2):
     # count positions with differing characters
     return sum(c1 != c2 for c1, c2 in zip(str1, str2))
 
-# calculates the average number of different alleles between population members and target
-def calculate_avg_different_alleles(population, target):
+# calculates the average number of different alleles between pairs in the population
+def calculate_avg_different_alleles(population):
     total_diff = 0
-    for candidate in population:
-        total_diff += different_alleles(candidate.gene, target)
+    count = 0
     
-    return total_diff / len(population)
+    # For each unique pair in the population
+    for i in range(len(population)):
+        for j in range(i + 1, len(population)):  # Start from i+1 to avoid repeating pairs
+            total_diff += different_alleles(population[i].gene, population[j].gene)
+            count += 1
+    
+    # Avoid division by zero if population has 0 or 1 members
+    if count == 0:
+        return 0
+    
+    return total_diff / count
 
 # calculates permutation distance using longest increasing subsequence approach
 def ulam_distance(s1, s2):
@@ -426,7 +435,7 @@ def plot_fitness_boxplots(fitness_distributions):
         lower_candidates = [v for v in data if v >= q1 - 1.5 * iqr]
         lower_whisker = min(lower_candidates) if lower_candidates else np.min(data)
         upper_candidates = [v for v in data if v <= q3 + 1.5 * iqr]
-        upper_whisker = max(upper_candidates) if upper_candidates else np.max(data)
+        upper_whisker = max(upper_candidates) if lower_candidates else np.max(data)
         median_val = np.median(data)
 
         plt.text(x + 0.1, median_val, f"{median_val:.1f}", color="red", fontsize=8, verticalalignment='center')
@@ -500,7 +509,7 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
         avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
         
         # calculate average different alleles
-        avg_diff_alleles = calculate_avg_different_alleles(population, ga_target)
+        avg_diff_alleles = calculate_avg_different_alleles(population)
         
         print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
         print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}, avg different alleles = {avg_diff_alleles:.2f}")
@@ -579,7 +588,7 @@ def main():
         avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
         
         # calculate average different alleles
-        avg_diff_alleles = calculate_avg_different_alleles(population, ga_target)
+        avg_diff_alleles = calculate_avg_different_alleles(population)
         
         print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
         print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}, avg different alleles = {avg_diff_alleles:.2f}")
