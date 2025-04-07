@@ -14,6 +14,7 @@ ga_crossover_method = "two_point"  # crossover strategy: single, two_point, or u
 ga_lcs_bonus = 5  # weight factor for lcs in combined fitness
 ga_fitness_mode = "ascii"  # fitness mode: ascii, lcs, or combined
 ga_max_runtime = 120  # maximum runtime in seconds (2 minutes)
+ga_distance_metric = "ulam"  # distance metric: levenshtein or ulam
 
 # represents one candidate solution in the population
 class Candidate:
@@ -44,6 +45,61 @@ def longest_common_subsequence(str1, str2):
             else:
                 dp[i][j] = max(dp[i-1][j], dp[i][j-1])
     return dp[m][n]
+
+def levenshtein_distance(str1, str2):
+    # get lengths of both strings
+    len_str1, len_str2 = len(str1), len(str2)
+    # create dp table for edit distances
+    dp = [[0] * (len_str2 + 1) for _ in range(len_str1 + 1)]
+    # initialize dp table for deletions (empty second string)
+    for i in range(len_str1 + 1):
+        dp[i][0] = i
+    # initialize dp table for insertions (empty first string)
+    for j in range(len_str2 + 1):
+        dp[0][j] = j
+    # fill dp table with min edit operations
+    for i in range(1, len_str1 + 1):
+        for j in range(1, len_str2 + 1):
+            # cost is 0 if characters match, else 1
+            cost = 0 if str1[i - 1] == str2[j - 1] else 1
+            dp[i][j] = min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+    # return computed levenshtein distance
+    return dp[len_str1][len_str2]
+
+def ulam_distance(s1, s2):
+    if len(s1) != len(s2):
+        raise ValueError("strings must be of equal length")
+        
+    # Check if both strings have the same set of characters
+    if set(s1) != set(s2):
+        return levenshtein_distance(s1, s2), True  # Return the distance and signal fallback
+        
+    #map each character in s2 to its index
+    index_map = {char: idx for idx, char in enumerate(s2)}
+    #convert s1 into a list of indices based on s2's ordering
+    mapped_indices = [index_map[char] for char in s1]
+    #helper function to perform binary search for first index in lst that is >= value
+    def find_position(lst, value):
+        lo = 0
+        hi = len(lst)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if lst[mid] < value:
+                lo = mid + 1
+            else:
+                hi = mid
+        return lo
+    #initialize list to hold the tails of increasing subsequences
+    lis_tails = []
+    #compute the longest increasing subsequence using manual binary search
+    for num in mapped_indices:
+        pos = find_position(lis_tails, num)
+        if pos == len(lis_tails):
+            lis_tails.append(num)  #extend current subsequence
+        else:
+            lis_tails[pos] = num   #replace element to maintain lowest tail
+    return len(s1) - len(lis_tails), False  # Return the distance and no fallback
+
 
 # calculates fitness for each candidate based on mode
 def calc_fitness(population):
@@ -194,18 +250,23 @@ def compute_fitness_statistics(population):
     worst_fitness = population[-1].fitness
     fitness_range = worst_fitness - best_fitness
 
-    scores = [1.0 / (1.0 + c.fitness) for c in population]
-    total_score = sum(scores)
+    inv_fitnesses = [1.0 / (1.0 + c.fitness) for c in population]
+    sum_inv_fitnesses = sum(inv_fitnesses)
     top_size = max(1, int(ga_elitrate * len(population)))
-    top_scores = scores[:top_size]
-    avg_top_score = sum(top_scores) / top_size
-    avg_score = total_score / len(population)
-    top_avg_prob_ratio = avg_top_score / avg_score
+    selection_probs=[inv_fitness / sum_inv_fitnesses for inv_fitness in inv_fitnesses]
+    selection_probs.sort(reverse=True)
+    selection_variance=np.var(selection_probs) * 10 ** (-int(math.floor(math.log10(np.var(selection_probs)))))
+
+    p_avg = 1 / len(population)
+    top_probs = selection_probs[:top_size]
+    p_top = sum(top_probs) / top_size
+    top_avg_prob_ratio = p_top / p_avg
 
     stats = {
         "mean": mean_fitness,
         "std": std_fitness,
         "variance": variance,
+        "selection_variance": selection_variance,
         "worst_fitness": worst_fitness,
         "fitness_range": fitness_range,
         "worst_candidate": population[-1],
@@ -230,6 +291,66 @@ def compute_timing_metrics(generation_start_cpu, overall_start_wall):
         "raw_ticks": raw_ticks,
         "ticks_per_second": ticks_per_second
     }
+
+# New function to calculate average population distance
+def calculate_avg_population_distance(population, distance_metric="levenshtein"):
+    """
+    Calculate the average pairwise distance between population members.
+    
+    Args:
+        population: List of Candidate objects
+        distance_metric: String, either "levenshtein" or "ulam"
+        
+    Returns:
+        tuple: (float: Average pairwise distance, str: actual metric used)
+    """
+    global ga_distance_metric
+    total_distance = 0
+    count = 0
+    used_levenshtein_fallback = False
+    
+    # Sample a subset if population is large to avoid excessive computation
+    pop_size = len(population)
+    sample_size = min(50, pop_size)  # Cap at 50 candidates to avoid O(n²) performance issues
+    
+    if pop_size <= sample_size:
+        sample = population
+    else:
+        # Sample randomly but include some of the best candidates
+        elite_size = max(1, int(0.1 * sample_size))  # Include top 10% of the sample
+        sample = population[:elite_size] + random.sample(population[elite_size:], sample_size - elite_size)
+    
+    for i in range(len(sample)):
+        for j in range(i + 1, len(sample)):
+            if distance_metric == "ulam":
+                # For Ulam distance, ensure strings are of same length
+                if len(sample[i].gene) == len(sample[j].gene):
+                    try:
+                        distance, fallback = ulam_distance(sample[i].gene, sample[j].gene)
+                        if fallback:
+                            used_levenshtein_fallback = True
+                    except ValueError:
+                        distance = levenshtein_distance(sample[i].gene, sample[j].gene)
+                        used_levenshtein_fallback = True
+                else:
+                    distance = levenshtein_distance(sample[i].gene, sample[j].gene)
+                    used_levenshtein_fallback = True
+            else:
+                # Default to levenshtein
+                distance = levenshtein_distance(sample[i].gene, sample[j].gene)
+            
+            total_distance += distance
+            count += 1
+    
+    # If we had to fall back to Levenshtein, update the global metric
+    if used_levenshtein_fallback and distance_metric == "ulam":
+        ga_distance_metric = "levenshtein"
+        print("Warning: Had to fall back to Levenshtein distance because Ulam conditions were not met")
+    
+    if count == 0:
+        return 0, ga_distance_metric
+    
+    return total_distance / count, ga_distance_metric
 
 # plots best, mean, and worst fitness over time
 def plot_fitness_evolution(best_history, mean_history, worst_history):
@@ -307,7 +428,8 @@ def plot_fitness_boxplots(fitness_distributions):
     plt.show()
 
 # runs the ga with the given parameters and returns stats
-def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate, population_size=2000, max_runtime=120):
+def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate, 
+           population_size=2000, max_runtime=120, distance_metric="levenshtein"):
     """
     runs the ga with the specified settings, returns:
       {
@@ -316,12 +438,13 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate, population_
         "termination_reason": str
       }
     """
-    global ga_crossover_method, ga_fitness_mode, ga_lcs_bonus, ga_mutationrate, ga_popsize
+    global ga_crossover_method, ga_fitness_mode, ga_lcs_bonus, ga_mutationrate, ga_popsize, ga_distance_metric
     ga_crossover_method = crossover_method
     ga_fitness_mode = fitness_mode
     ga_lcs_bonus = lcs_bonus
     ga_mutationrate = mutation_rate
     ga_popsize = population_size
+    ga_distance_metric = distance_metric
 
     random.seed(time.time())
     population, buffer = init_population()
@@ -356,10 +479,12 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate, population_
 
         print_best(population)
         stats = compute_fitness_statistics(population)
-        print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, variance = {stats['variance']:.2f}, std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
-
-        # new line to report top-average selection probability ratio
-        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}")
+        
+        # Calculate average population distance
+        avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
+        
+        print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
+        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}")
 
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
         gen_ticks = time.perf_counter_ns() - generation_start_ticks
@@ -412,6 +537,7 @@ def main():
         print(f"using fitness mode: {ga_fitness_mode}")
 
     print(f"Maximum runtime set to {ga_max_runtime} seconds")
+    print(f"Using {ga_distance_metric} distance metric for population diversity")
 
     for iteration in range(ga_maxiter):
         # Check if we've exceeded the time limit
@@ -429,10 +555,12 @@ def main():
         print_best(population)
 
         stats = compute_fitness_statistics(population)
-        print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, variance = {stats['variance']:.2f}, std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
-
-        # new line to report top-average selection probability ratio
-        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}")
+        
+        # Calculate average population distance
+        avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
+        
+        print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
+        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}")
 
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
         gen_ticks = time.perf_counter_ns() - generation_start_ticks

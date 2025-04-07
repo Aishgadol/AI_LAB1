@@ -2,57 +2,54 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-
 def plot_fitness_landscape():
-    # Create a grid of points for gene1 (x) and gene2 (y)
-    gene1 = np.linspace(0, 10, 50)  # Gene 1 range
-    gene2 = np.linspace(0, 10, 50)  # Gene 2 range
+    # Create a high-resolution grid of points for gene1 (x) and gene2 (y)
+    gene1 = np.linspace(-10, 10, 500)  # Gene 1 range
+    gene2 = np.linspace(-10, 10, 500)  # Gene 2 range
     X, Y = np.meshgrid(gene1, gene2)
 
-    # Let's define a simple time function: time = X + Y
-    # You can replace this with any function that makes sense for your data
-    Z = X + Y
-
-    # Define the fitness function; here we map higher values (near 1000) down to 0
-    # by subtracting a factor that grows with X + Y.
-    # You could use your own real-world function or data array here.
-    Fitness = 1000 - 50 * (X + Y)
-
-    # Normalize the fitness values so we can map them to colors
-    fitness_min, fitness_max = Fitness.min(), Fitness.max()
-    norm = (Fitness - fitness_min) / (fitness_max - fitness_min)
+    # Define the fitness function - lowest when Gene 1 ≈ Gene 2
+    Fitness = 1000 - (10 * np.abs(X - Y) + 5 * np.sin(5 * (X + Y)))
+    
+    # Add randomness to create a rugged, noisy surface
+    randomness = np.random.normal(0, 50, X.shape)
+    Fitness += randomness
+    
+    # Set a minimum "floor" value to ensure we don't go below a certain threshold
+    Fitness = np.clip(Fitness, 0, 1000)  # Floor value of 0 and ceiling value of 1000
 
     # Create a figure and 3D axes
-    fig = plt.figure()
+    fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
 
-    # Plot the surface; color is based on Fitness
-    # Use facecolors=... so that Z is used for height, and Fitness sets the color
-    ax.plot_surface(
-        X, Y, Z,
-        facecolors=cm.viridis(norm),
+    # Plot the surface with fitness as the Z value
+    surf = ax.plot_surface(
+        X, Y, Fitness,
+        cmap=cm.plasma,  # Changed colormap to 'plasma'
         rstride=1,
-        cstride=1
+        cstride=1,
+        linewidth=0,
+        antialiased=True
     )
 
-    # Create a scalar mappable to add a colorbar
-    mappable = cm.ScalarMappable(cmap=cm.viridis)
-    mappable.set_clim(fitness_min, fitness_max)
-    # We don't pass real data to the mappable, so just set_array([]).
-    mappable.set_array([])
-
     # Add color bar for the fitness scale
-    cbar = fig.colorbar(mappable, shrink=0.5, aspect=10)
+    cbar = fig.colorbar(surf, shrink=0.5, aspect=10)
     cbar.set_label('Fitness')
 
     # Labels and title
     ax.set_xlabel('Gene 1')
     ax.set_ylabel('Gene 2')
-    ax.set_zlabel('Time')
     ax.set_title('Fitness Landscape')
 
-    plt.show()
+    # Set axis ranges
+    ax.set_xlim([-10, 10])
+    ax.set_ylim([-10, 10])
+    ax.set_zlim([0, 1000])  # Updated z-axis limit
 
+    # Enable grid lines
+    ax.grid(True)
+
+    plt.show()
 
 if __name__ == "__main__":
     plot_fitness_landscape()
