@@ -75,6 +75,25 @@ def different_alleles(str1, str2):
     # count positions with differing characters
     return sum(c1 != c2 for c1, c2 in zip(str1, str2))
 
+# calculates the average number of different alleles between population members and target
+def calculate_avg_different_alleles(population, target):
+    """
+    Calculate the average number of different alleles (characters) between 
+    population members and the target string.
+    
+    Args:
+        population: List of Candidate objects
+        target: Target string
+        
+    Returns:
+        float: Average number of different alleles
+    """
+    total_diff = 0
+    for candidate in population:
+        total_diff += different_alleles(candidate.gene, target)
+    
+    return total_diff / len(population)
+
 # calculates permutation distance using longest increasing subsequence approach
 def ulam_distance(s1, s2):
     if len(s1) != len(s2):
@@ -491,8 +510,11 @@ def run_ga(crossover_method, fitness_mode, lcs_bonus, mutation_rate,
         # evaluate population diversity through distance metrics
         avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
         
+        # calculate average different alleles
+        avg_diff_alleles = calculate_avg_different_alleles(population, ga_target)
+        
         print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
-        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}")
+        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}, avg different alleles = {avg_diff_alleles:.2f}")
 
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
         gen_ticks = time.perf_counter_ns() - generation_start_ticks
@@ -567,8 +589,11 @@ def main():
         # measure genetic diversity within current population
         avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
         
+        # calculate average different alleles
+        avg_diff_alleles = calculate_avg_different_alleles(population, ga_target)
+        
         print(f"generation {iteration}: mean fitness = {stats['mean']:.2f}, selection variance = {stats['selection_variance']:.4f}, fitness std = {stats['std']:.2f}, worst fitness = {stats['worst_fitness']}, range = {stats['fitness_range']}, worst candidate = {stats['worst_candidate'].gene}")
-        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}")
+        print(f"selection pressure -> top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, avg {actual_metric} distance = {avg_distance:.2f}, avg different alleles = {avg_diff_alleles:.2f}")
 
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
         gen_ticks = time.perf_counter_ns() - generation_start_ticks
@@ -598,3 +623,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
