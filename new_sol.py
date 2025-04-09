@@ -18,8 +18,8 @@ ga_use_aging = True             # Enable or disable aging-based survival
 ga_age_limit = 100               # Default age limit for individuals
 
 # Existing parameters for GA:
-ga_popsize = 500
-ga_maxiter = 150
+ga_popsize = 1000
+ga_maxiter = 200
 ga_elitrate = 0.10
 ga_mutationrate = 0.55
 ga_target = "testing string123 diff_chars"

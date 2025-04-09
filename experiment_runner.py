@@ -1,23 +1,35 @@
-import sol
+import new_sol as sol
 import random
 import time
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-def run_experiment(lcs_bonus, crossover_method, mutation_rate, fitness_mode, max_iter=150):
+def run_experiment(
+    lcs_bonus, crossover_method, mutation_rate, fitness_mode, 
+    selection_method, use_linear_scaling, max_iter=170
+):
     """
-    Wrapper function to run sol.run_ga with specific parameters and extract needed data
+    Updated wrapper to run sol.run_ga with new parameters 
     """
+    sol.ga_maxiter = max_iter
     # Run the GA with specified parameters
     results = sol.run_ga(
         crossover_method=crossover_method, 
         fitness_mode=fitness_mode, 
         lcs_bonus=lcs_bonus, 
         mutation_rate=mutation_rate,
-        population_size=500,  # Default from sol.py
-        max_runtime=120,      # Default from sol.py
-        distance_metric="levenshtein"  # Default from sol.py
+        population_size=1000,
+        max_runtime=120,
+        distance_metric="levenshtein",
+        selection_method=selection_method,
+        use_linear_scaling=use_linear_scaling,
+        max_fitness_ratio=2.0,
+        use_aging=True,
+        age_limit=100,
+        tournament_k=3,
+        tournament_k_prob=3,
+        tournament_p=0.75
     )
     
     # Extract relevant data
@@ -66,56 +78,42 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
     
     # Define parameter ranges to test
-    lcs_bonuses = [1,5]#, 5, 10, 20, 50]
-    mutation_rates = [0.7,0.25, 0.5]
-    fitness_modes = ["ascii"]#, "lcs", "combined"]
-    crossover_methods = ["single", "two_point", "uniform"]
+    selection_methods = ["rws", "sus", "tournament_deterministic", "tournament_probabilistic"]
+    linear_scalings = [True, False]
 
     # Prepare results structure
-    # Format: {method: {combo: {"history": [...], "metrics": {...}}}}
-    results = {method: {} for method in crossover_methods}
+    results = {}
+    for sel_method in selection_methods:
+        results[sel_method] = {}
+        for lin_scaling in linear_scalings:
+            print(f"\n=== Testing selection={sel_method}, linear_scaling={lin_scaling} ===")
+            history, final_iter = run_experiment(
+                lcs_bonus=35,
+                crossover_method="two_point",
+                mutation_rate=0.55,
+                fitness_mode="combined",
+                selection_method=sel_method,
+                use_linear_scaling=lin_scaling,
+                max_iter=170
+            )
+            metrics = calculate_metrics(history, final_iter)
+            results[sel_method][lin_scaling] = {
+                "history": history,
+                "metrics": metrics
+            }
+            print(f"  Final fitness: {metrics['final_fitness']}, Iterations: {final_iter}")
 
-    # Run experiments
-    for method in crossover_methods:
-        print(f"\n--- TESTING CROSSOVER METHOD: {method} ---\n")
-        
-        for lcs_bonus in lcs_bonuses:
-            for mut_rate in mutation_rates:
-                for fit_mode in fitness_modes:
-                    # Skip irrelevant combinations
-                    if fit_mode != "combined" and lcs_bonus != 5:
-                        continue
-                        
-                    combo = (lcs_bonus, mut_rate, fit_mode)
-                    print(f"Running GA with method={method}, LCS bonus={lcs_bonus}, "
-                          f"mutation rate={mut_rate}, fitness mode={fit_mode}")
-                    
-                    # Run GA and track metrics
-                    history, final_iter = run_experiment(lcs_bonus, method, mut_rate, fit_mode)
-                    metrics = calculate_metrics(history, final_iter)
-                    
-                    # Store results
-                    results[method][combo] = {
-                        "history": history,
-                        "metrics": metrics
-                    }
-                    
-                    # Print summary
-                    print(f"  Final fitness: {metrics['final_fitness']}, "
-                          f"Iterations: {final_iter}, "
-                          f"{'SOLVED!' if metrics['solved'] else 'Not solved'}")
-
-    # Plot results for each crossover method
-    for method in crossover_methods:
+    # Plot results for each selection method
+    for sel_method in selection_methods:
         # Find best combinations based on combined score
         combos_by_score = sorted(
-            results[method].items(),
+            results[sel_method].items(),
             key=lambda x: x[1]["metrics"]["combined_score"]
         )
         
-        # Get 3 best and 3 worst combinations
-        best_combos = [combo for combo, _ in combos_by_score[:3]]
-        worst_combos = [combo for combo, _ in combos_by_score[-3:]]
+        # Get 2 best and 2 worst combinations
+        best_combos = [combo for combo, _ in combos_by_score[:2]]
+        worst_combos = [combo for combo, _ in combos_by_score[-2:]]
         selected_combos = best_combos + worst_combos
         
         # Create plot with more space for legend
@@ -123,10 +121,10 @@ def main():
         
         # Plot only selected combinations
         for combo in selected_combos:
-            history = results[method][combo]["history"]
-            metrics = results[method][combo]["metrics"]
+            history = results[sel_method][combo]["history"]
+            metrics = results[sel_method][combo]["metrics"]
             
-            label_str = (f"LCS={combo[0]}, MUT={combo[1]:.2f}, FIT={combo[2]}, "
+            label_str = (f"Linear Scaling={combo}, "
                         f"Final={metrics['final_fitness']}")
             
             # Add marker to differentiate best vs worst
@@ -137,7 +135,7 @@ def main():
                 plt.plot(history, label=f"WORST: {label_str}", 
                          linestyle='--', linewidth=1, marker='x', markevery=50)
                 
-        plt.title(f"Best vs Worst Parameter Combinations ({method} crossover)", fontsize=14)
+        plt.title(f"Best vs Worst Parameter Combinations ({sel_method} selection)", fontsize=14)
         plt.xlabel("Generation", fontsize=12)
         plt.ylabel("Best Fitness (lower is better)", fontsize=12)
         plt.grid(True)
@@ -151,18 +149,18 @@ def main():
         plt.subplots_adjust(right=0.7)
         
         # Save the figure
-        plt.savefig(f"{results_dir}/{method}_comparison.png", dpi=300)
+        plt.savefig(f"{results_dir}/{sel_method}_comparison.png", dpi=300)
         plt.show()
         
         # Create a summary table for this method
-        print(f"\nSummary for {method} crossover:")
+        print(f"\nSummary for {sel_method} selection:")
         print("-" * 80)
         print(f"{'Parameters':<25} {'Final':<10} {'Iterations':<12} {'Conv.Speed':<12} {'Status':<10}")
         print("-" * 80)
         
         for combo, data in combos_by_score:
             metrics = data["metrics"]
-            param_str = f"LCS={combo[0]}, MUT={combo[1]}, FIT={combo[2]}"
+            param_str = f"Linear Scaling={combo}"
             status = "SOLVED" if metrics["solved"] else "Not solved"
             
             print(f"{param_str:<25} {metrics['final_fitness']:<10.2f} "
@@ -170,3 +168,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
