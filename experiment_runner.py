@@ -104,60 +104,39 @@ def main():
                 "metrics": metrics
             }
 
-    # Plot results for each selection method
+    # Create one big figure with 4 graphs
+    fig, axes = plt.subplots(2, 2, figsize=(14, 8))
+    axes = axes.flatten()
+
+    for i, sel_method in enumerate(selection_methods):
+        ax = axes[i]
+        for combo, data in results[sel_method].items():
+            mean_history = data["mean_history"]
+            metrics = data["metrics"]
+            label_str = f"LinScaling={combo}, Final={metrics['final_fitness']}"
+            ax.plot(mean_history, label=label_str)
+        ax.set_title(f"{sel_method} Selection", fontsize=12)
+        ax.set_xlabel("Generation", fontsize=10)
+        ax.set_ylabel("Average Fitness (lower=better)", fontsize=10)
+        ax.legend()
+        ax.grid(True)
+        ax.set_yscale("log")
+
+    plt.tight_layout()
+    plt.savefig(f"{results_dir}/all_selection_methods.png", dpi=300)
+    plt.show()
+
+    # Create a summary table for each selection method
     for sel_method in selection_methods:
-        # Find best combinations based on combined score
-        combos_by_score = sorted(
-            results[sel_method].items(),
-            key=lambda x: x[1]["metrics"]["combined_score"]
-        )
-        
-        # Get 2 best and 2 worst combinations
-        best_combos = [combo for combo, _ in combos_by_score[:2]]
-        worst_combos = [combo for combo, _ in combos_by_score[-2:]]
-        selected_combos = best_combos + worst_combos
-        
-        # Create plot with more space for legend
-        plt.figure(figsize=(14, 8))
-        
-        # Plot only selected combinations
-        for combo in selected_combos:
-            mean_history = results[sel_method][combo]["mean_history"]
-            metrics = results[sel_method][combo]["metrics"]
-            
-            label_str = (f"Linear Scaling={combo}, "
-                        f"Final={metrics['final_fitness']}")
-            
-            # Add marker to differentiate best vs worst
-            if combo in best_combos:
-                plt.plot(mean_history, label=f"BEST: {label_str}", 
-                         linestyle='-', linewidth=2, marker='o', markevery=25)
-            else:
-                plt.plot(mean_history, label=f"WORST: {label_str}", 
-                         linestyle='--', linewidth=1, marker='x', markevery=25)
-                
-        plt.title(f"Best vs Worst Mean Fitness ({sel_method} selection)", fontsize=14)
-        plt.xlabel("Generation", fontsize=12)
-        plt.ylabel("Average Fitness (lower is better)", fontsize=12)
-        plt.grid(True)
-        plt.yscale('log')  # Use log scale to better see differences
-        
-        # Place legend outside the plot
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
-        
-        # Adjust layout to make room for legend
-        plt.tight_layout()
-        plt.subplots_adjust(right=0.7)
-        
-        # Save the figure
-        plt.savefig(f"{results_dir}/{sel_method}_comparison.png", dpi=300)
-        plt.show()
-        
-        # Create a summary table for this method
         print(f"\nSummary for {sel_method} selection:")
         print("-" * 80)
         print(f"{'Parameters':<25} {'Final':<10} {'Iterations':<12} {'Conv.Speed':<12} {'Status':<10}")
         print("-" * 80)
+        
+        combos_by_score = sorted(
+            results[sel_method].items(),
+            key=lambda x: x[1]["metrics"]["combined_score"]
+        )
         
         for combo, data in combos_by_score:
             metrics = data["metrics"]
@@ -169,3 +148,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
