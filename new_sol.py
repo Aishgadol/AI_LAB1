@@ -7,14 +7,14 @@ import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # GLOBAL PARAMETERS - NEW/UPDATED
 # -----------------------------------------------------------------------------
-ga_selection_method = "rws"      # "rws", "sus", "tournament_deterministic", "tournament_probabilistic"
-ga_use_linear_scaling = False     # If True, apply linear scaling for RWS or SUS
+ga_selection_method = "tournament_probabilistic"      # "rws", "sus", "tournament_deterministic", "tournament_probabilistic"
+ga_use_linear_scaling = True     # If True, apply linear scaling for RWS or SUS
 ga_max_fitness_ratio = 2.0       # Maximum ratio (scaled_best / scaled_avg) to limit dominance
 ga_tournament_k = 3              # 'k' for deterministic tournament
 ga_tournament_k_prob = 3         # 'k' for probabilistic tournament
 ga_tournament_p = 0.75           # 'p' for probabilistic tournament
 
-ga_use_aging = False             # Enable or disable aging-based survival
+ga_use_aging = True             # Enable or disable aging-based survival
 ga_age_limit = 100               # Default age limit for individuals
 
 # Existing parameters for GA:
@@ -164,89 +164,43 @@ def linear_scale_fitness(population, max_ratio=2.0):
     (max_scaled / avg_scaled) <= max_ratio. We'll store the scaled fitness
     in candidate.scaled_fitness to use in RWS or SUS.
     """
-    # First, compute raw stats
     raw_fitnesses = [c.fitness for c in population]
     f_min = min(raw_fitnesses)
     f_max = max(raw_fitnesses)
-    f_avg = sum(raw_fitnesses) / len(raw_fitnesses)
 
     # If the entire population has the same fitness, no scaling needed
     if abs(f_max - f_min) < 1e-9:
         for c in population:
-            c.scaled_fitness = 1.0  # constant
+            c.scaled_fitness = 1.0  # all equal
         return
 
-    # Basic linear scaling terms: s_i = a * f_i + b
-    # We'll adjust a and b so that:
-    #  - the best individual is not more than 'max_ratio' times above the average.
-    #
-    # Standard linear scaling formula from Goldberg:
-    #   s_i = a * f_i + b
-    #
-    # We can also enforce: scaled_min >= 0
-
-    # By default, a = (desired_avg - min_scaled) / (f_avg - f_min)
-    # but we also want scaled_max / scaled_avg <= max_ratio
-    # We'll do a quick approach:
-    #  1) Set s_i' = f_max - f_i so "lower fitness = bigger selection chance" if you prefer.
-    #     However, typically for RWS we want "bigger fitness => bigger probability".
-    #     We'll do "bigger fitness => bigger selection chance". So let's invert:
-    #     If your GA is currently "lower is better" you might invert. But let's keep it consistent
-    #     with your current code. Right now, "candidate.fitness = lower is better". We'll invert
-    #     to turn that into "scaled_fitness is bigger is better".
-    #
-    # So we define: raw_score = (f_max - c.fitness).
-    # Then we do the standard linear scaling on raw_score to limit ratio.
-    #
-    # We'll rename them for clarity:
-    scores = [f_max - f for f in raw_fitnesses]  # now bigger = better
+    # We want "larger scaled_fitness" to mean better. But your GA uses "lower is better".
+    # So let's invert: score = (f_max - raw_fitness)
+    scores = [f_max - f for f in raw_fitnesses]
     score_min, score_max = min(scores), max(scores)
-    score_avg = sum(scores) / len(scores)
+    base_values = [s - score_min for s in scores]
+    base_max = score_max - score_min
+    base_avg = sum(base_values) / len(base_values) if len(base_values) > 0 else 0.0
 
-    if abs(score_max - score_min) < 1e-9:
-        # Everyone is effectively the same after inversion
+    if abs(base_max) < 1e-9:
+        # Everyone effectively identical after inversion
         for c in population:
             c.scaled_fitness = 1.0
         return
 
-    # If we do standard linear scaling to ensure scaled_min ~ 0
-    #   s_i = (scores[i] - score_min)
-    # Then we can shift or scale up so that the average is e.g. some value. Then we clamp ratio.
-    # We'll do a simpler approach:
-    #   s_i_base = (scores[i] - score_min)
-    #   base_max = score_max - score_min
-    #   base_avg = sum of s_i_base / n
-    # We want: scaled_max / scaled_avg <= max_ratio
-    # scaled_max = a * base_max
-    # scaled_avg = a * base_avg
-    # => scaled_max / scaled_avg = base_max / base_avg
-    # so we must choose a so that
-    #   (a * base_max) / (a * base_avg) = base_max / base_avg <= max_ratio
-    # If base_max/base_avg is bigger than max_ratio, we reduce a; otherwise we do a=1
-    base_values = [s - score_min for s in scores]
-    base_max = score_max - score_min
-    base_avg = sum(base_values) / len(base_values)
-
     ratio = (base_max / base_avg) if base_avg > 1e-9 else 1.0
+    # If ratio > max_ratio, scale down
     if ratio > max_ratio:
-        # scale down
         a = max_ratio / ratio
     else:
         a = 1.0
 
-    # Then s_i = a * base_values[i]
-    # This ensures the ratio <= max_ratio
-    # We'll just store scaled_fitness = max(0, a*base_val)
-    # If that ends up being zero for some, that's okay, as long as total > 0
     for i, c in enumerate(population):
-        base_val = base_values[i]
-        c.scaled_fitness = a * base_val
+        c.scaled_fitness = a * base_values[i]
 
-    # If entire population is extremely uniform, we might end up with all zeroes.
-    # As a fallback, ensure they sum to something:
+    # final safety check if everything is zero
     total_scaled = sum(c.scaled_fitness for c in population)
     if total_scaled < 1e-9:
-        # if all zero, just assign uniform
         for c in population:
             c.scaled_fitness = 1.0
 
@@ -255,7 +209,7 @@ def linear_scale_fitness(population, max_ratio=2.0):
 # SELECTION METHODS
 # -----------------------------------------------------------------------------
 def rws_select_one(population):
-    """Roulette Wheel Selection for ONE parent, assuming we have .scaled_fitness available."""
+    """Roulette Wheel Selection for ONE parent, using .scaled_fitness."""
     total = sum(c.scaled_fitness for c in population)
     if total < 1e-9:
         return random.choice(population)
@@ -271,13 +225,11 @@ def rws_select_one(population):
 
 def sus_select_parents(population, num_parents):
     """
-    Stochastic Universal Sampling to pick 'num_parents' individuals at once.
-    We assume .scaled_fitness is set, we do a single pass with equally spaced pointers.
-    Return the list of chosen individuals.
+    Stochastic Universal Sampling to pick 'num_parents' individuals in one pass.
+    Uses .scaled_fitness.
     """
     total = sum(c.scaled_fitness for c in population)
     if total < 1e-9:
-        # fallback: random picks
         return [random.choice(population) for _ in range(num_parents)]
 
     distance = total / num_parents
@@ -295,27 +247,16 @@ def sus_select_parents(population, num_parents):
 
 
 def tournament_deterministic_select_one(population, k=2):
-    """Pick the best out of k randomly chosen candidates."""
+    """Pick the best out of k randomly chosen candidates (lowest fitness)."""
     contenders = random.sample(population, k)
-    # The one with the lowest .fitness is best in your system
-    # so we sort by .fitness ascending
-    contenders.sort(key=lambda c: c.fitness)
+    contenders.sort(key=lambda c: c.fitness)  # best = lowest
     return contenders[0]
 
 
 def tournament_probabilistic_select_one(population, k=2, p=0.75):
-    """
-    Non-deterministic (probabilistic) tournament selection:
-      1) Randomly choose k individuals
-      2) Sort them best->worst
-      3) Pick the best with prob p, second-best with prob p*(1-p), etc.
-    """
+    """Probabilistic tournament: pick k, then best with p, second with p*(1-p), etc."""
     contenders = random.sample(population, k)
     contenders.sort(key=lambda c: c.fitness)  # best first
-    # best has index 0
-    # probability for contender[i] = p * (1-p)^i
-    # but we need to do a stepwise draw
-    # We'll do a standard approach: generate r, walk down cumulative probabilities
     r = random.random()
     cumulative = 0.0
     for i, cand in enumerate(contenders):
@@ -323,43 +264,13 @@ def tournament_probabilistic_select_one(population, k=2, p=0.75):
         cumulative += prob_i
         if r <= cumulative:
             return cand
-    # if not found, return the last
     return contenders[-1]
-
-
-def select_one_parent(population):
-    """
-    Master selection function that picks ONE parent
-    using ga_selection_method. If using RWS/SUS,
-    ensure linear scaling has already been called.
-    """
-    method = ga_selection_method.lower()
-    if method == "rws":
-        # we assume that if ga_use_linear_scaling is True, we've done linear_scale_fitness
-        return rws_select_one(population)
-    elif method == "sus":
-        # For SUS, we typically do one big pass for multiple parents,
-        # but for simplicity we can pick one parent at a time:
-        chosen = sus_select_parents(population, 1)
-        return chosen[0]
-
-    elif method == "tournament_deterministic":
-        return tournament_deterministic_select_one(population, ga_tournament_k)
-
-    elif method == "tournament_probabilistic":
-        return tournament_probabilistic_select_one(population, ga_tournament_k_prob, ga_tournament_p)
-
-    else:
-        # default to the old approach for backward compatibility
-        return old_roulette_wheel_select(population)
 
 
 def old_roulette_wheel_select(candidates):
     """
-    This is your original random-based selection approach from the code
-    (in the snippet you had a 'roulette_wheel_select' that used 1/(1+fitness)).
-    We keep it here so that if user does not set ga_selection_method,
-    the code remains backward compatible.
+    Your original fallback if user picks something else.
+    This uses 1/(1+fitness).
     """
     inv_fitnesses = [1.0 / (1.0 + c.fitness) for c in candidates]
     total_inv = sum(inv_fitnesses)
@@ -370,6 +281,29 @@ def old_roulette_wheel_select(candidates):
         if pick <= running_sum:
             return candidates[i]
     return candidates[-1]
+
+
+def select_one_parent(population):
+    """
+    Master selection function that picks ONE parent
+    using ga_selection_method. If we are doing RWS/SUS, we must ensure
+    .scaled_fitness is defined. If linear_scaling is off, we define
+    scaled_fitness = 1/(1+fitness) as a fallback.
+    """
+    method = ga_selection_method.lower()
+
+    if method == "rws":
+        return rws_select_one(population)
+    elif method == "sus":
+        # If we want exactly 1 parent, pick from the list that SUS returns
+        return sus_select_parents(population, 1)[0]
+    elif method == "tournament_deterministic":
+        return tournament_deterministic_select_one(population, ga_tournament_k)
+    elif method == "tournament_probabilistic":
+        return tournament_probabilistic_select_one(population, ga_tournament_k_prob, ga_tournament_p)
+    else:
+        # Fallback to old method
+        return old_roulette_wheel_select(population)
 
 
 # -----------------------------------------------------------------------------
@@ -421,29 +355,18 @@ def mutate(candidate):
 # ELITISM
 # -----------------------------------------------------------------------------
 def elitism(population, buffer, elite_size):
-    """
-    Copy top 'elite_size' from population -> buffer,
-    preserving their ages (and incrementing them).
-    """
     for i in range(elite_size):
         buffer[i].gene = population[i].gene
         buffer[i].fitness = population[i].fitness
-        # Surviving to next gen => increment age
-        buffer[i].age = population[i].age + 1
+        buffer[i].age = population[i].age + 1  # Surviving => increment age
 
 
 # -----------------------------------------------------------------------------
 # AGING-BASED SURVIVAL
 # -----------------------------------------------------------------------------
 def apply_aging_replacement(population):
-    """
-    For each individual whose age > ga_age_limit, replace it with a new child
-    from crossover of two selected parents (same selection method).
-    Age of new child = 0.
-    """
     if not ga_use_aging:
         return
-
     target_length = len(ga_target)
     for i in range(len(population)):
         if population[i].age > ga_age_limit:
@@ -451,7 +374,6 @@ def apply_aging_replacement(population):
             parent1 = select_one_parent(population)
             parent2 = select_one_parent(population)
 
-            # do crossover
             if ga_crossover_method == "single":
                 c1, _ = single_point_crossover(parent1, parent2, target_length)
             elif ga_crossover_method == "two_point":
@@ -461,7 +383,6 @@ def apply_aging_replacement(population):
             else:
                 c1, _ = single_point_crossover(parent1, parent2, target_length)
 
-            # form new candidate
             new_cand = Candidate(c1, fitness=0)
             new_cand.age = 0
             population[i] = new_cand
@@ -477,20 +398,22 @@ def mate(population, buffer):
     # 1) Elitism
     elitism(population, buffer, elite_size)
 
-    # 2) If using RWS or SUS, perform linear scaling if requested
+    # 2) If using RWS or SUS:
     method = ga_selection_method.lower()
-    if method in ["rws", "sus"] and ga_use_linear_scaling:
-        linear_scale_fitness(population, ga_max_fitness_ratio)
-    # If method is something else, we skip linear scaling
+    if method in ["rws", "sus"]:
+        if ga_use_linear_scaling:
+            linear_scale_fitness(population, ga_max_fitness_ratio)
+        else:
+            # fallback so scaled_fitness is defined
+            for c in population:
+                c.scaled_fitness = 1.0 / (1.0 + c.fitness)
 
-    # 3) Fill the remainder of the buffer
+    # 3) Fill remainder of buffer
     i = elite_size
     while i < ga_popsize - 1:
-        # pick parents
         parent1 = select_one_parent(population)
         parent2 = select_one_parent(population)
 
-        # do crossover
         if ga_crossover_method == "single":
             child1, child2 = single_point_crossover(parent1, parent2, target_length)
         elif ga_crossover_method == "two_point":
@@ -502,12 +425,11 @@ def mate(population, buffer):
 
         buffer[i].gene = child1
         buffer[i].fitness = 0
-        buffer[i].age = 0  # new child => age=0
+        buffer[i].age = 0
         buffer[i + 1].gene = child2
         buffer[i + 1].fitness = 0
         buffer[i + 1].age = 0
 
-        # apply mutation
         if random.random() < ga_mutationrate:
             mutate(buffer[i])
         if random.random() < ga_mutationrate:
@@ -515,7 +437,7 @@ def mate(population, buffer):
 
         i += 2
 
-    # If popsize is odd, handle last one
+    # Handle odd count
     if ga_popsize % 2 == 1 and i < ga_popsize:
         buffer[i].gene = buffer[i - 1].gene
         buffer[i].fitness = buffer[i - 1].fitness
@@ -523,7 +445,7 @@ def mate(population, buffer):
         if random.random() < ga_mutationrate:
             mutate(buffer[i])
 
-    # 4) Aging replacement step (on the newly formed generation)
+    # 4) Aging-based replacement
     apply_aging_replacement(buffer)
 
 
@@ -651,7 +573,7 @@ def calculate_avg_population_distance(population, distance_metric="levenshtein")
 
 
 def calculate_avg_shannon_entropy(population):
-    if not population or len(population) == 0:
+    if not population:
         return 0.0
     gene_length = len(population[0].gene)
     position_entropies = []
@@ -671,7 +593,7 @@ def calculate_avg_shannon_entropy(population):
 
 
 # -----------------------------------------------------------------------------
-# VISUALIZATIONS
+# VISUALIZATIONS (RESTORED 1:1 WITH ORIGINAL)
 # -----------------------------------------------------------------------------
 def plot_fitness_evolution(best_history, mean_history, worst_history):
     generations = list(range(len(best_history)))
@@ -681,7 +603,7 @@ def plot_fitness_evolution(best_history, mean_history, worst_history):
     plt.plot(generations, worst_history, label="worst", linewidth=2)
     plt.xlabel("generation")
     plt.ylabel("fitness")
-    plt.title(f"fitness evolution (crossover: {ga_crossover_method})")
+    plt.title(f"fitness evolution over generations (crossover: {ga_crossover_method})")
     plt.legend()
     plt.grid(True)
     plt.show()
@@ -716,11 +638,11 @@ def plot_fitness_boxplots(fitness_distributions):
     )
     plt.xlabel("generation")
     plt.ylabel("fitness")
-    plt.title(f"fitness distribution (crossover: {ga_crossover_method})")
+    plt.title(f"fitness distribution per generation (crossover: {ga_crossover_method})")
     plt.xticks(range(1, len(indices) + 1), xtick_labels)
     plt.grid(True)
 
-    # annotate for readability
+    # annotate data
     for i, data in enumerate(sampled_distributions):
         x = i + 1
         q1 = np.percentile(data, 25)
@@ -743,19 +665,47 @@ def plot_fitness_boxplots(fitness_distributions):
     box_patch = mpatches.Patch(facecolor='lightblue', edgecolor='blue', label='iqr')
     outlier_marker = mlines.Line2D([], [], marker='D', color='blue', linestyle='none', markersize=4, label='outliers')
     plt.legend(handles=[box_patch, median_line, whisker_line, outlier_marker], loc='upper right')
-
     plt.show()
 
 
 def plot_entropy_evolution(entropy_history, allele_diff_history, distance_history):
     generations = list(range(len(entropy_history)))
     plt.figure(figsize=(14, 8))
-    plt.plot(generations, entropy_history, label="Shannon Entropy", linewidth=2)
-    plt.plot(generations, allele_diff_history, label="Avg Different Alleles", linewidth=2)
-    plt.plot(generations, distance_history, label="Avg Distance", linewidth=2)
+
+    # EXACT color usage as your original code
+    plt.plot(generations, entropy_history, label="Shannon Entropy", linewidth=2, color='purple')
+    plt.plot(generations, allele_diff_history, label="Avg Different Alleles", linewidth=2, color='red')
+    plt.plot(generations, distance_history, label="Avg Levenshtein Distance", linewidth=2, color='blue')
+
+    # Annotate at 10 points if length > 1
+    if len(generations) > 1:
+        label_points = [int(i * (len(generations) - 1) / 9) for i in range(10)]
+        for idx in label_points:
+            plt.annotate(f"Entropy: {entropy_history[idx]:.2f}",
+                         (idx, entropy_history[idx]),
+                         textcoords="offset points",
+                         xytext=(0, 10),
+                         ha='center',
+                         color='purple',
+                         fontsize=8)
+            plt.annotate(f"Alleles: {allele_diff_history[idx]:.2f}",
+                         (idx, allele_diff_history[idx]),
+                         textcoords="offset points",
+                         xytext=(0, -15),
+                         ha='center',
+                         color='red',
+                         fontsize=8)
+            plt.annotate(f"Levenshtein: {distance_history[idx]:.2f}",
+                         (idx, distance_history[idx]),
+                         textcoords="offset points",
+                         xytext=(0, 10),
+                         ha='center',
+                         color='blue',
+                         fontsize=8)
+
     plt.xlabel("Generation")
     plt.ylabel("Diversity Metrics")
-    plt.title("Population Diversity Metrics")
+    plt.title("Population Diversity Metrics per Generation")
     plt.legend(loc='upper right')
     plt.grid(True)
     plt.tight_layout()
@@ -774,7 +724,7 @@ def run_ga(
     max_runtime=120,
     distance_metric="levenshtein",
     selection_method="rws",
-    use_linear_scaling=False,
+    use_linear_scaling=True,
     max_fitness_ratio=2.0,
     use_aging=False,
     age_limit=100,
@@ -784,14 +734,12 @@ def run_ga(
 ):
     """
     Run the GA with the specified settings, returning a dict of stats.
-    All parameters have defaults for backward-compatibility.
     """
     global ga_crossover_method, ga_fitness_mode, ga_lcs_bonus, ga_mutationrate
     global ga_popsize, ga_distance_metric, ga_max_runtime
     global ga_selection_method, ga_use_linear_scaling, ga_max_fitness_ratio
     global ga_use_aging, ga_age_limit, ga_tournament_k, ga_tournament_k_prob, ga_tournament_p
 
-    # set all
     ga_crossover_method = crossover_method
     ga_fitness_mode = fitness_mode
     ga_lcs_bonus = lcs_bonus
@@ -843,7 +791,6 @@ def run_ga(
         print_best(population)
         stats = compute_fitness_statistics(population)
 
-        # diversity
         avg_distance, actual_metric = calculate_avg_population_distance(population, ga_distance_metric)
         distance_history.append(avg_distance)
         avg_diff_alleles = calculate_avg_different_alleles(population)
@@ -977,6 +924,7 @@ def main():
     final_time = time.time() - overall_start_wall
     print(f"Total runtime: {final_time:.2f} seconds")
 
+    # Plot results (1:1 with original code style)
     plot_fitness_evolution(best_history, mean_history, worst_history)
     plot_fitness_boxplots(fitness_distributions)
     plot_entropy_evolution(entropy_history, allele_diff_history, distance_history)
