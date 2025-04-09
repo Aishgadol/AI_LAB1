@@ -12,7 +12,7 @@ ga_mutationrate = 0.55  # higher mutation increases exploration but may slow con
 ga_target = "testing string123 diff_chars"  # target string for evolutionary convergence
 ga_crossover_method = "two_point"  #"single", "two_point", "uniform" genetic recombination strategy for offspring creation
 ga_lcs_bonus = 5  # weight factor for longest common subsequence in fitness calculation
-ga_fitness_mode = "combined"  #"ascii", "lcs", "combined" method for evaluating candidate fitness
+ga_fitness_mode = "ascii"  #"ascii", "lcs", "combined" method for evaluating candidate fitness
 ga_max_runtime = 120  # maximum execution time in seconds to prevent excessive computation
 ga_distance_metric = "levenshtein"  # "ulam" or "levenshtein", measuring sequence dissimilarity
 
