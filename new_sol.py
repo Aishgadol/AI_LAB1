@@ -8,25 +8,25 @@ import matplotlib.pyplot as plt
 # GLOBAL PARAMETERS - NEW/UPDATED
 # -----------------------------------------------------------------------------
 ga_selection_method = "tournament_probabilistic"      # "rws", "sus", "tournament_deterministic", "tournament_probabilistic"
-ga_use_linear_scaling = True     # If True, apply linear scaling for RWS or SUS
-ga_max_fitness_ratio = 2.0       # Maximum ratio (scaled_best / scaled_avg) to limit dominance
-ga_tournament_k = 3              # 'k' for deterministic tournament
-ga_tournament_k_prob = 3         # 'k' for probabilistic tournament
-ga_tournament_p = 0.75           # 'p' for probabilistic tournament
+ga_use_linear_scaling = True     # if True, apply linear scaling for RWS or SUS
+ga_max_fitness_ratio = 2.0       #maximum ratio (scaled_best / scaled_avg) to limit dominance
+ga_tournament_k = 3              #'k' for deterministic tournament
+ga_tournament_k_prob = 3         #'k' for probabilistic (non-determinstic) tournament
+ga_tournament_p = 0.75           #'p' for probabilistic (non-determinstic) tournament
 
-ga_use_aging = True             # Enable or disable aging-based survival
-ga_age_limit = 100               # Default age limit for individuals
+ga_use_aging = True             #enable or disable aging-based survival
+ga_age_limit = 100               #default age limit for individuals
 
 # Existing parameters for GA:
 ga_popsize = 1000
-ga_maxiter = 200
+ga_maxiter = 250
 ga_elitrate = 0.10
 ga_mutationrate = 0.55
 ga_target = "testing string123 diff_chars"
 ga_crossover_method = "two_point"  # "single", "two_point", or "uniform"
 ga_lcs_bonus = 5
 ga_fitness_mode = "ascii"       # "ascii", "lcs", "combined"
-ga_max_runtime = 120
+ga_max_runtime = 600
 ga_distance_metric = "levenshtein" # "ulam" or "levenshtein"
 
 
@@ -37,7 +37,7 @@ class Candidate:
     def __init__(self, gene, fitness=0):
         self.gene = gene
         self.fitness = fitness
-        self.age = 0  # new field to track aging
+        self.age = 0  #track aging
 
 
 # -----------------------------------------------------------------------------
@@ -159,37 +159,29 @@ def sort_by_fitness(population):
 # SELECTION: LINEAR SCALING FOR RWS / SUS
 # -----------------------------------------------------------------------------
 def linear_scale_fitness(population, max_ratio=2.0):
-    """
-    Perform linear scaling of each candidate's fitness to keep the ratio
-    (max_scaled / avg_scaled) <= max_ratio. We'll store the scaled fitness
-    in candidate.scaled_fitness to use in RWS or SUS.
-    """
     raw_fitnesses = [c.fitness for c in population]
     f_min = min(raw_fitnesses)
     f_max = max(raw_fitnesses)
-
-    # If the entire population has the same fitness, no scaling needed
+    #if entire population has the same fitness, no scaling needed
     if abs(f_max - f_min) < 1e-9:
         for c in population:
             c.scaled_fitness = 1.0  # all equal
         return
-
-    # We want "larger scaled_fitness" to mean better. But your GA uses "lower is better".
-    # So let's invert: score = (f_max - raw_fitness)
+    #want "larger scaled_fitness" to mean better so we invert scores
+    #invert: score = (f_max - raw_fitness)
     scores = [f_max - f for f in raw_fitnesses]
     score_min, score_max = min(scores), max(scores)
     base_values = [s - score_min for s in scores]
     base_max = score_max - score_min
     base_avg = sum(base_values) / len(base_values) if len(base_values) > 0 else 0.0
-
     if abs(base_max) < 1e-9:
-        # Everyone effectively identical after inversion
+        #everyone effectively identical after inversion
         for c in population:
             c.scaled_fitness = 1.0
         return
 
     ratio = (base_max / base_avg) if base_avg > 1e-9 else 1.0
-    # If ratio > max_ratio, scale down
+    #if ratio > max_ratio, scale down
     if ratio > max_ratio:
         a = max_ratio / ratio
     else:
@@ -209,7 +201,6 @@ def linear_scale_fitness(population, max_ratio=2.0):
 # SELECTION METHODS
 # -----------------------------------------------------------------------------
 def rws_select_one(population):
-    """Roulette Wheel Selection for ONE parent, using .scaled_fitness."""
     total = sum(c.scaled_fitness for c in population)
     if total < 1e-9:
         return random.choice(population)
@@ -224,10 +215,6 @@ def rws_select_one(population):
 
 
 def sus_select_parents(population, num_parents):
-    """
-    Stochastic Universal Sampling to pick 'num_parents' individuals in one pass.
-    Uses .scaled_fitness.
-    """
     total = sum(c.scaled_fitness for c in population)
     if total < 1e-9:
         return [random.choice(population) for _ in range(num_parents)]
@@ -247,14 +234,12 @@ def sus_select_parents(population, num_parents):
 
 
 def tournament_deterministic_select_one(population, k=2):
-    """Pick the best out of k randomly chosen candidates (lowest fitness)."""
     contenders = random.sample(population, k)
     contenders.sort(key=lambda c: c.fitness)  # best = lowest
     return contenders[0]
 
 
 def tournament_probabilistic_select_one(population, k=2, p=0.75):
-    """Probabilistic tournament: pick k, then best with p, second with p*(1-p), etc."""
     contenders = random.sample(population, k)
     contenders.sort(key=lambda c: c.fitness)  # best first
     r = random.random()
@@ -268,10 +253,6 @@ def tournament_probabilistic_select_one(population, k=2, p=0.75):
 
 
 def old_roulette_wheel_select(candidates):
-    """
-    Your original fallback if user picks something else.
-    This uses 1/(1+fitness).
-    """
     inv_fitnesses = [1.0 / (1.0 + c.fitness) for c in candidates]
     total_inv = sum(inv_fitnesses)
     pick = random.random()
@@ -797,7 +778,8 @@ def run_ga(
         allele_diff_history.append(avg_diff_alleles)
         avg_shannon_entropy = calculate_avg_shannon_entropy(population)
         entropy_history.append(avg_shannon_entropy)
-
+        if stats['selection_variance'] >0:
+            stats['selection_variance']=stats['selection_variance'] * 10 ** (-math.floor(math.log10(stats['selection_variance'])))
         print(
             f"Gen {iteration}: mean={stats['mean']:.2f}, std={stats['std']:.2f}, worst={stats['worst_fitness']}, "
             f"range={stats['fitness_range']}, selection_var={stats['selection_variance']:.4f}"
@@ -896,6 +878,8 @@ def main():
             f"std = {stats['std']:.2f}, worst = {stats['worst_fitness']}, "
             f"range = {stats['fitness_range']}"
         )
+        if stats['selection_variance'] > 0:
+            stats['selection_variance'] = stats['selection_variance'] * 100000000
         print(
             f"   selection_var = {stats['selection_variance']:.4f}, top_avg_prob_ratio = {stats['top_avg_prob_ratio']:.2f}, "
             f"distance = {avg_distance:.2f}, diff_alleles = {avg_diff_alleles:.2f}, "

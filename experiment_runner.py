@@ -4,7 +4,6 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import concurrent.futures
 
 def run_experiment(
     lcs_bonus, crossover_method, mutation_rate, fitness_mode, 
@@ -21,7 +20,7 @@ def run_experiment(
         lcs_bonus=lcs_bonus, 
         mutation_rate=mutation_rate,
         population_size=1000,
-        max_runtime=120,
+        max_runtime=6000,
         distance_metric="levenshtein",
         selection_method=selection_method,
         use_linear_scaling=use_linear_scaling,
@@ -35,9 +34,10 @@ def run_experiment(
     
     # Extract relevant data
     best_history = results["best_fitness_history"]
+    mean_history = results["mean_fitness_history"]
     final_iteration = results["converged_generation"]
     
-    return best_history, final_iteration
+    return best_history, mean_history, final_iteration
 
 def calculate_metrics(history, final_iter):
     # Calculate various performance metrics
@@ -85,34 +85,24 @@ def main():
     # Prepare results structure
     results = {}
 
-    # Run experiments in parallel
-    futures = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        for sel_method in selection_methods:
-            results[sel_method] = {}
-            for lin_scaling in linear_scalings:
-                futures.append(
-                    executor.submit(
-                        run_experiment,
-                        5,  # lcs_bonus changed to 5
-                        "two_point",
-                        0.55,
-                        "combined",
-                        sel_method,
-                        lin_scaling,
-                        170
-                    )
-                )
-
-        # Collect results
-        for sel_method in selection_methods:
-            for lin_scaling in linear_scalings:
-                best_history, final_iter = futures.pop(0).result()
-                metrics = calculate_metrics(best_history, final_iter)
-                results[sel_method][lin_scaling] = {
-                    "history": best_history,
-                    "metrics": metrics
-                }
+    # Run experiments in plain loops
+    for sel_method in selection_methods:
+        results[sel_method] = {}
+        for lin_scaling in linear_scalings:
+            best_history, mean_history, final_iter = run_experiment(
+                5,  # lcs_bonus changed to 5
+                "two_point",
+                0.55,
+                "combined",
+                sel_method,
+                lin_scaling,
+                250
+            )
+            metrics = calculate_metrics(best_history, final_iter)
+            results[sel_method][lin_scaling] = {
+                "mean_history": mean_history,
+                "metrics": metrics
+            }
 
     # Plot results for each selection method
     for sel_method in selection_methods:
@@ -132,7 +122,7 @@ def main():
         
         # Plot only selected combinations
         for combo in selected_combos:
-            history = results[sel_method][combo]["history"]
+            mean_history = results[sel_method][combo]["mean_history"]
             metrics = results[sel_method][combo]["metrics"]
             
             label_str = (f"Linear Scaling={combo}, "
@@ -140,15 +130,15 @@ def main():
             
             # Add marker to differentiate best vs worst
             if combo in best_combos:
-                plt.plot(history, label=f"BEST: {label_str}", 
-                         linestyle='-', linewidth=2, marker='o', markevery=50)
+                plt.plot(mean_history, label=f"BEST: {label_str}", 
+                         linestyle='-', linewidth=2, marker='o', markevery=25)
             else:
-                plt.plot(history, label=f"WORST: {label_str}", 
-                         linestyle='--', linewidth=1, marker='x', markevery=50)
+                plt.plot(mean_history, label=f"WORST: {label_str}", 
+                         linestyle='--', linewidth=1, marker='x', markevery=25)
                 
-        plt.title(f"Best vs Worst Parameter Combinations ({sel_method} selection)", fontsize=14)
+        plt.title(f"Best vs Worst Mean Fitness ({sel_method} selection)", fontsize=14)
         plt.xlabel("Generation", fontsize=12)
-        plt.ylabel("Best Fitness (lower is better)", fontsize=12)
+        plt.ylabel("Average Fitness (lower is better)", fontsize=12)
         plt.grid(True)
         plt.yscale('log')  # Use log scale to better see differences
         
