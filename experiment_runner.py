@@ -78,19 +78,14 @@ def main():
     results_dir = "experiment_results"
     os.makedirs(results_dir, exist_ok=True)
     
-    # Define parameter ranges to test
-    selection_methods = ["rws", "sus", "tournament_deterministic", "tournament_probabilistic"]
-    linear_scalings = [True, False]
-
-    # Prepare results structure
     results = {}
 
-    # Run experiments in plain loops
-    for sel_method in selection_methods:
+    # RWS & SUS with or without linear scaling
+    for sel_method in ["rws", "sus"]:
         results[sel_method] = {}
-        for lin_scaling in linear_scalings:
+        for lin_scaling in [True, False]:
             best_history, mean_history, final_iter = run_experiment(
-                5,  # lcs_bonus changed to 5
+                5,
                 "two_point",
                 0.55,
                 "combined",
@@ -99,7 +94,47 @@ def main():
                 250
             )
             metrics = calculate_metrics(best_history, final_iter)
-            results[sel_method][lin_scaling] = {
+            results[sel_method][f"linScaling={lin_scaling}"] = {
+                "mean_history": mean_history,
+                "metrics": metrics
+            }
+
+    # deterministic tournament (k in [2,3,4])
+    results["tournament_deterministic"] = {}
+    for k_val in [2, 3, 4]:
+        best_history, mean_history, final_iter = run_experiment(
+            5,
+            "two_point",
+            0.55,
+            "combined",
+            "tournament_deterministic",
+            False,
+            250,
+        )
+        sol.ga_tournament_k = k_val
+        metrics = calculate_metrics(best_history, final_iter)
+        results["tournament_deterministic"][f"k={k_val}"] = {
+            "mean_history": mean_history,
+            "metrics": metrics
+        }
+
+    # probabilistic tournament (k in [2,3,4], p in [0.1, 0.4, 0.75])
+    results["tournament_probabilistic"] = {}
+    for k_val in [2, 3, 4]:
+        for p_val in [0.1, 0.4, 0.75]:
+            best_history, mean_history, final_iter = run_experiment(
+                5,
+                "two_point",
+                0.55,
+                "combined",
+                "tournament_probabilistic",
+                False,
+                250,
+            )
+            sol.ga_tournament_k_prob = k_val
+            sol.ga_tournament_p = p_val
+            metrics = calculate_metrics(best_history, final_iter)
+            results["tournament_probabilistic"][f"k={k_val},p={p_val}"] = {
                 "mean_history": mean_history,
                 "metrics": metrics
             }
@@ -108,12 +143,12 @@ def main():
     fig, axes = plt.subplots(2, 2, figsize=(14, 8))
     axes = axes.flatten()
 
-    for i, sel_method in enumerate(selection_methods):
+    for i, sel_method in enumerate(results.keys()):
         ax = axes[i]
         for combo, data in results[sel_method].items():
             mean_history = data["mean_history"]
             metrics = data["metrics"]
-            label_str = f"LinScaling={combo}, Final={metrics['final_fitness']}"
+            label_str = f"{combo}, Final={metrics['final_fitness']}"
             ax.plot(mean_history, label=label_str)
         ax.set_title(f"{sel_method} Selection", fontsize=12)
         ax.set_xlabel("Generation", fontsize=10)
@@ -127,7 +162,7 @@ def main():
     plt.show()
 
     # Create a summary table for each selection method
-    for sel_method in selection_methods:
+    for sel_method in results.keys():
         print(f"\nSummary for {sel_method} selection:")
         print("-" * 80)
         print(f"{'Parameters':<25} {'Final':<10} {'Iterations':<12} {'Conv.Speed':<12} {'Status':<10}")
@@ -140,7 +175,7 @@ def main():
         
         for combo, data in combos_by_score:
             metrics = data["metrics"]
-            param_str = f"Linear Scaling={combo}"
+            param_str = f"{combo}"
             status = "SOLVED" if metrics["solved"] else "Not solved"
             
             print(f"{param_str:<25} {metrics['final_fitness']:<10.2f} "
