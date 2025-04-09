@@ -16,12 +16,20 @@ ga_fitness_mode = "combined"  # "ascii", "lcs", "combined" method for evaluating
 ga_max_runtime = 120  # maximum execution time in seconds to prevent excessive computation
 ga_distance_metric = "levenshtein"  # "ulam" or "levenshtein", measuring sequence dissimilarity
 
+# new global parameters for selection and aging
+ga_selection_method = "rws"       # options: "rws", "sus", "tournament_deterministic", "tournament_probabilistic"
+ga_max_fitness_ratio = 2.0        # for linear scaling
+ga_tournament_k = 3               # for deterministic or non-deterministic tournament
+ga_tournament_p = 0.7             # probability for non-deterministic tournament
+ga_age_limit = 100
+
 
 # encapsulates a potential solution with its genetic representation and quality score
 class Candidate:
     def __init__(self, gene, fitness=0):
         self.gene = gene  # string representation of candidate solution
         self.fitness = fitness  # fitness score (lower values indicate better solutions)
+        self.age = 0  # new: track generation age
 
 
 # creates initial random population with specified genetic characteristics
@@ -228,18 +236,84 @@ def uniform_crossover(parent1, parent2, target_length):
     return ''.join(child1_gene), ''.join(child2_gene)
 
 
-# selects individuals proportionally to fitness using probability-based sampling
-def roulette_wheel_select(candidates):
-    inv_fitnesses = [1.0 / (1.0 + c.fitness) for c in candidates]
+# scales fitness values for selection methods
+def scale_fitness_values(population):
+    raw_fits = [cand.fitness for cand in population]
+    avg_fit = sum(raw_fits) / len(raw_fits)
+    if avg_fit == 0:
+        return  # avoid division by zero
+    max_fit = max(raw_fits)
+    scale_factor = (ga_max_fitness_ratio * avg_fit) / max_fit if max_fit > 0 else 1.0
+    for cand in population:
+        cand.fitness *= scale_factor
+
+
+# roulette wheel selection with scaled fitness
+def rws_select(population):
+    inv_fitnesses = [1.0 / (1.0 + c.fitness) for c in population]
     total_inv = sum(inv_fitnesses)
-    probabilities = [inv / total_inv for inv in inv_fitnesses]
-    pick = random.random()
+    pick = random.random() * total_inv
     running_sum = 0.0
-    for i, prob in enumerate(probabilities):
-        running_sum += prob
-        if pick <= running_sum:
-            return candidates[i]
-    return candidates[-1]
+    for i, inv in enumerate(inv_fitnesses):
+        running_sum += inv
+        if running_sum >= pick:
+            return population[i]
+    return population[-1]
+
+
+# stochastic universal sampling with scaled fitness
+def sus_select(population):
+    inv_fitnesses = [1.0 / (1.0 + c.fitness) for c in population]
+    total_inv = sum(inv_fitnesses)
+    num_parents = len(population) // 2
+    distance = total_inv / num_parents
+    start = random.random() * distance
+    pointers = [start + i * distance for i in range(num_parents)]
+    selected = []
+    for ptr in pointers:
+        running_sum = 0.0
+        for cand, inv in zip(population, inv_fitnesses):
+            running_sum += inv
+            if running_sum >= ptr:
+                selected.append(cand)
+                break
+    return selected
+
+
+# deterministic tournament selection
+def deterministic_tournament_select(population):
+    contenders = random.sample(population, ga_tournament_k)
+    return min(contenders, key=lambda c: c.fitness)
+
+
+# non-deterministic tournament selection
+def nondet_tournament_select(population):
+    contenders = random.sample(population, ga_tournament_k)
+    contenders.sort(key=lambda c: c.fitness)
+    cumulative = 0.0
+    for i, cand in enumerate(contenders):
+        prob = ga_tournament_p * ((1 - ga_tournament_p) ** i)
+        cumulative += prob
+        if random.random() <= cumulative:
+            return cand
+    return contenders[-1]
+
+
+# selects individuals proportionally to fitness using probability-based sampling
+def select_parent(population):
+    if ga_selection_method in ["rws", "sus"]:
+        scale_fitness_values(population)
+
+    if ga_selection_method == "rws":
+        return rws_select(population)
+    elif ga_selection_method == "sus":
+        return sus_select(population)[0]
+    elif ga_selection_method == "tournament_deterministic":
+        return deterministic_tournament_select(population)
+    elif ga_selection_method == "tournament_probabilistic":
+        return nondet_tournament_select(population)
+    else:
+        return roulette_wheel_select(population)  # fallback to original
 
 
 # produces next generation through selection, recombination and mutation
@@ -248,8 +322,8 @@ def mate(population, buffer):
     target_length = len(ga_target)
     elitism(population, buffer, elite_size)
     for i in range(elite_size, ga_popsize - 1, 2):
-        parent1 = roulette_wheel_select(population[:ga_popsize // 2])
-        parent2 = roulette_wheel_select(population[:ga_popsize // 2])
+        parent1 = select_parent(population)
+        parent2 = select_parent(population)
 
         if ga_crossover_method == "single":
             child1, child2 = single_point_crossover(parent1, parent2, target_length)
@@ -273,6 +347,17 @@ def mate(population, buffer):
         buffer[-1] = Candidate(buffer[-2].gene)
         if random.random() < ga_mutationrate:
             mutate(buffer[-1])
+
+    # apply aging-based survival
+    for i in range(ga_popsize):
+        buffer[i].age = population[i].age + 1
+        if buffer[i].age > ga_age_limit:
+            p1 = select_parent(population)
+            p2 = select_parent(population)
+            child1, _ = single_point_crossover(p1, p2, len(ga_target))
+            buffer[i].gene = child1
+            buffer[i].fitness = 0
+            buffer[i].age = 0
 
 
 # displays current best solution and its fitness score
