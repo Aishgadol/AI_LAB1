@@ -1,53 +1,29 @@
 import sol
 import random
 import time
-import math
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-def run_ga(lcs_bonus, crossover_method, mutation_rate, fitness_mode, max_iter=sol.GA_MAXITER):
-    # Store old global values to restore later
-    old_lcs_bonus = sol.GA_LCS_BONUS
-    old_crossover = sol.GA_CROSSOVER_METHOD
-    old_mutrate = sol.GA_MUTATIONRATE
-    old_fitmode = sol.GA_FITNESS_MODE
-    old_maxiter = sol.GA_MAXITER
-
-    # Set new params
-    sol.GA_LCS_BONUS = lcs_bonus
-    sol.GA_CROSSOVER_METHOD = crossover_method
-    sol.GA_MUTATIONRATE = mutation_rate
-    sol.GA_FITNESS_MODE = fitness_mode
-    sol.GA_MAXITER = max_iter
-
-    # GA loop, similar to main but returning best_history instead of plotting
-    population, buffer = sol.init_population()
-    best_history = []
-    final_iteration = max_iter
+def run_experiment(lcs_bonus, crossover_method, mutation_rate, fitness_mode, max_iter=150):
+    """
+    Wrapper function to run sol.run_ga with specific parameters and extract needed data
+    """
+    # Run the GA with specified parameters
+    results = sol.run_ga(
+        crossover_method=crossover_method, 
+        fitness_mode=fitness_mode, 
+        lcs_bonus=lcs_bonus, 
+        mutation_rate=mutation_rate,
+        population_size=500,  # Default from sol.py
+        max_runtime=120,      # Default from sol.py
+        distance_metric="levenshtein"  # Default from sol.py
+    )
     
-    for iteration in range(max_iter):
-        sol.calc_fitness(population)
-        sol.sort_by_fitness(population)
-        best_history.append(population[0].fitness)
-        
-        if iteration % 100 == 0:
-            print(f"[run_ga] iteration={iteration}, best fitness={population[0].fitness}")
-        
-        if population[0].fitness == 0:
-            final_iteration = iteration
-            break
-            
-        sol.mate(population, buffer)
-        population, buffer = sol.swap(population, buffer)
-
-    # Restore globals
-    sol.GA_LCS_BONUS = old_lcs_bonus
-    sol.GA_CROSSOVER_METHOD = old_crossover
-    sol.GA_MUTATIONRATE = old_mutrate
-    sol.GA_FITNESS_MODE = old_fitmode
-    sol.GA_MAXITER = old_maxiter
-
+    # Extract relevant data
+    best_history = results["best_fitness_history"]
+    final_iteration = results["converged_generation"]
+    
     return best_history, final_iteration
 
 def calculate_metrics(history, final_iter):
@@ -90,9 +66,9 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
     
     # Define parameter ranges to test
-    lcs_bonuses = [1, 5, 10, 20, 50]
-    mutation_rates = [0.25, 0.5, 0.7]
-    fitness_modes = ["ascii", "lcs", "combined"]
+    lcs_bonuses = [1,5]#, 5, 10, 20, 50]
+    mutation_rates = [0.7,0.25, 0.5]
+    fitness_modes = ["ascii"]#, "lcs", "combined"]
     crossover_methods = ["single", "two_point", "uniform"]
 
     # Prepare results structure
@@ -115,7 +91,7 @@ def main():
                           f"mutation rate={mut_rate}, fitness mode={fit_mode}")
                     
                     # Run GA and track metrics
-                    history, final_iter = run_ga(lcs_bonus, method, mut_rate, fit_mode)
+                    history, final_iter = run_experiment(lcs_bonus, method, mut_rate, fit_mode)
                     metrics = calculate_metrics(history, final_iter)
                     
                     # Store results
