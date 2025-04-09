@@ -4,6 +4,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import concurrent.futures
 
 def run_experiment(
     lcs_bonus, crossover_method, mutation_rate, fitness_mode, 
@@ -83,25 +84,35 @@ def main():
 
     # Prepare results structure
     results = {}
-    for sel_method in selection_methods:
-        results[sel_method] = {}
-        for lin_scaling in linear_scalings:
-            print(f"\n=== Testing selection={sel_method}, linear_scaling={lin_scaling} ===")
-            history, final_iter = run_experiment(
-                lcs_bonus=35,
-                crossover_method="two_point",
-                mutation_rate=0.55,
-                fitness_mode="combined",
-                selection_method=sel_method,
-                use_linear_scaling=lin_scaling,
-                max_iter=170
-            )
-            metrics = calculate_metrics(history, final_iter)
-            results[sel_method][lin_scaling] = {
-                "history": history,
-                "metrics": metrics
-            }
-            print(f"  Final fitness: {metrics['final_fitness']}, Iterations: {final_iter}")
+
+    # Run experiments in parallel
+    futures = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        for sel_method in selection_methods:
+            results[sel_method] = {}
+            for lin_scaling in linear_scalings:
+                futures.append(
+                    executor.submit(
+                        run_experiment,
+                        5,  # lcs_bonus changed to 5
+                        "two_point",
+                        0.55,
+                        "combined",
+                        sel_method,
+                        lin_scaling,
+                        170
+                    )
+                )
+
+        # Collect results
+        for sel_method in selection_methods:
+            for lin_scaling in linear_scalings:
+                best_history, final_iter = futures.pop(0).result()
+                metrics = calculate_metrics(best_history, final_iter)
+                results[sel_method][lin_scaling] = {
+                    "history": best_history,
+                    "metrics": metrics
+                }
 
     # Plot results for each selection method
     for sel_method in selection_methods:
@@ -168,4 +179,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
