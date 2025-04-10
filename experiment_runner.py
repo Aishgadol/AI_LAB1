@@ -1,4 +1,4 @@
-import new_sol as sol
+import sol
 import random
 import time
 import matplotlib.pyplot as plt
