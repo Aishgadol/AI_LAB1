@@ -14,20 +14,32 @@ ga_tournament_k = 3              #'k' for deterministic tournament
 ga_tournament_k_prob = 3         #'k' for probabilistic (non-determinstic) tournament
 ga_tournament_p = 0.75           #'p' for probabilistic (non-determinstic) tournament
 
-ga_use_aging = True             #enable or disable aging-based survival
+ga_use_aging = True              #enable or disable aging-based survival
 ga_age_limit = 100               #default age limit for individuals
 
-# Existing parameters for GA:
+# Existing parameters for GA (string matching defaults):
 ga_popsize = 1000
 ga_maxiter = 250
 ga_elitrate = 0.10
 ga_mutationrate = 0.55
 ga_target = "testing string123 diff_chars"
-ga_crossover_method = "two_point"  # "single", "two_point", or "uniform"
+ga_crossover_method = "two_point"  # "single", "two_point", or "uniform" (for strings)
 ga_lcs_bonus = 5
 ga_fitness_mode = "ascii"       # "ascii", "lcs", "combined"
 ga_max_runtime = 600
 ga_distance_metric = "levenshtein" # "ulam" or "levenshtein"
+
+# -----------------------------------------------------------------------------
+# NEW: ADD PROBLEM TYPE + PARAMETERS FOR BIN PACKING OR FUTURE EXPANSIONS
+# -----------------------------------------------------------------------------
+ga_problem_type = "string"  # "string" or "bin_packing" or "arc" (for future extension)
+
+#for bin packing
+ga_binpacking_items = [10, 8, 3, 7, 5, 9, 1, 2]  #example item sizes
+ga_binpacking_bin_capacity = 15
+ga_binpacking_alpha = 0.4  #weight for wasted space in fitness formula
+
+# You may add additional parameters for future expansions (ARC, etc.) here.
 
 
 # -----------------------------------------------------------------------------
@@ -37,229 +49,57 @@ class Candidate:
     def __init__(self, gene, fitness=0):
         self.gene = gene
         self.fitness = fitness
-        self.age = 0  #track aging
+        self.age = 0  # track aging
 
 
 # -----------------------------------------------------------------------------
-# CONFIG & STRATEGIES (MODULAR)
+# PROBLEM-SPECIFIC INITIALIZATIONS
 # -----------------------------------------------------------------------------
-class GAConfig:
-    def __init__(
-        self,
-        problem_type="string_match",
-        crossover_method="two_point",
-        mutation_method="swap",
-        fitness_mode="combined",
-        bin_capacity=100,
-        alpha=1.0
-        # ...any other relevant params...
-    ):
-        self.problem_type = problem_type
-        self.crossover_method = crossover_method
-        self.mutation_method = mutation_method
-        self.fitness_mode = fitness_mode
-        self.bin_capacity = bin_capacity
-        self.alpha = alpha
-        self.strategy = None  # will hold the chosen ProblemStrategy
+def init_population_string():
 
-    def select_strategy(self):
-        if self.problem_type == "bin_packing":
-            self.strategy = BinPacking1DStrategy(self)
-        else:
-            # fallback to string matching
-            self.strategy = StringMatchingStrategy(self)
-
-
-class ProblemStrategy:
-    def __init__(self, config):
-        self.config = config
-
-    def init_population(self):
-        raise NotImplementedError("implement in subclass")
-
-    def calc_fitness(self, population):
-        raise NotImplementedError("implement in subclass")
-
-    def crossover(self, parent1, parent2):
-        raise NotImplementedError("implement in subclass")
-
-    def mutate(self, candidate):
-        raise NotImplementedError("implement in subclass")
-
-    # Optionally, define fallback or utility crossovers/mutations below.
-
-
-class StringMatchingStrategy(ProblemStrategy):
-    def __init__(self, config):
-        super().__init__(config)
-
-    def init_population(self):
-        # ...existing string-based initialization code...
-        # re-use init_population for string matching
-        return init_population()  # still calls the old function
-
-    def calc_fitness(self, population):
-        # ...existing code...
-        return calc_fitness(population)
-
-    def crossover(self, parent1, parent2):
-        # fallback to existing crossovers
-        # (single_point, two_point, uniform), else default to single_point
-        method = self.config.crossover_method.lower()
-        target_length = len(parent1.gene)
-        if method == "two_point":
-            return two_point_crossover(parent1, parent2, target_length)
-        elif method == "uniform":
-            return uniform_crossover(parent1, parent2, target_length)
-        else:
-            return single_point_crossover(parent1, parent2, target_length)
-
-    def mutate(self, candidate):
-        # fallback to existing mutate, or do swap if needed
-        # fallback to the old mutate method for string problems
-        mutate(candidate)
-
-
-class BinPacking1DStrategy(ProblemStrategy):
-    def __init__(self, config):
-        super().__init__(config)
-
-    def init_population(self):
-        # Example: represent each candidate as a permutation of item indices
-        # For demonstration, just re-use an existing structure or define new logic
-        # We show minimal code here:
-        pop = []
-        for _ in range(ga_popsize):
-            items = list(range(50))  # example: 50 items for bin packing
-            random.shuffle(items)
-            pop.append(Candidate(items))
-        buffer = [Candidate([]) for _ in range(ga_popsize)]
-        return pop, buffer
-
-    def calc_fitness(self, population):
-        # fitness = num_bins + alpha * (wasted_space / bin_capacity)
-        for cand in population:
-            # example naive bin packing
-            total_bins, wasted = self.simple_bin_pack(cand.gene, self.config.bin_capacity)
-            cand.fitness = total_bins + self.config.alpha * (wasted / self.config.bin_capacity)
-
-    def crossover(self, parent1, parent2):
-        # Provide any permutation-based crossovers: PMX, OX, CX (fallback)
-        method = self.config.crossover_method.lower()
-        if method == "pmx":
-            return pmx_crossover(parent1.gene, parent2.gene)
-        elif method == "ox":
-            return ox_crossover(parent1.gene, parent2.gene)
-        elif method == "cx":
-            return cycle_crossover(parent1.gene, parent2.gene)
-        else:
-            # fallback to cycle crossover
-            return cycle_crossover(parent1.gene, parent2.gene)
-
-    def mutate(self, candidate):
-        # Provide fallback to 'swap' if invalid
-        method = self.config.mutation_method.lower()
-        if method == "displacement":
-            displacement_mutation(candidate.gene)
-        elif method == "insertion":
-            insertion_mutation(candidate.gene)
-        elif method == "inversion":
-            inversion_mutation(candidate.gene)
-        elif method == "scramble":
-            scramble_mutation(candidate.gene)
-        elif method == "swap":
-            swap_mutation(candidate.gene)
-        else:
-            swap_mutation(candidate.gene)  # fallback
-
-    def simple_bin_pack(self, items, capacity):
-        # minimal bin packing logic for demonstration:
-        current_bin_space = capacity
-        total_bins = 1
-        wasted = 0
-        for it in items:
-            size = 1  # assume item size=1
-            if size > current_bin_space:
-                wasted += current_bin_space
-                total_bins += 1
-                current_bin_space = capacity - size
-            else:
-                current_bin_space -= size
-        wasted += current_bin_space
-        return total_bins, wasted
-
-
-# -----------------------------------------------------------------------------
-# PERMUTATION HELPERS (NEW)
-# -----------------------------------------------------------------------------
-def swap_mutation(gene):
-    if len(gene) < 2:
-        return
-    i, j = random.sample(range(len(gene)), 2)
-    gene[i], gene[j] = gene[j], gene[i]
-
-
-def displacement_mutation(gene):
-    # minimal example
-    i, j = sorted(random.sample(range(len(gene)), 2))
-    segment = gene[i:j]
-    del gene[i:j]
-    k = random.randint(0, len(gene))
-    for x in segment:
-        gene.insert(k, x)
-
-
-def insertion_mutation(gene):
-    i, j = sorted(random.sample(range(len(gene)), 2))
-    val = gene.pop(j)
-    gene.insert(i, val)
-
-
-def inversion_mutation(gene):
-    i, j = sorted(random.sample(range(len(gene)), 2))
-    gene[i:j] = reversed(gene[i:j])
-
-
-def scramble_mutation(gene):
-    i, j = sorted(random.sample(range(len(gene)), 2))
-    subset = gene[i:j]
-    random.shuffle(subset)
-    gene[i:j] = subset
-
-
-def pmx_crossover(g1, g2):
-    # placeholder demonstration
-    return g1[:], g2[:]
-
-
-def ox_crossover(g1, g2):
-    return g1[:], g2[:]
-
-
-def cycle_crossover(g1, g2):
-    return g1[:], g2[:]
-
-
-# -----------------------------------------------------------------------------
-# POPULATION INITIALIZATION
-# -----------------------------------------------------------------------------
-def init_population():
-    # now just defer to config.strategy for domain-specific init
-    if ga_config and ga_config.strategy:
-        return ga_config.strategy.init_population()
-    # fallback to original code if config not set
     target_length = len(ga_target)
     population = []
     for _ in range(ga_popsize):
         gene = ''.join(chr(random.randint(32, 121)) for _ in range(target_length))
         population.append(Candidate(gene))
-    # create a buffer to hold next-gen individuals
     buffer = [Candidate('', 0) for _ in range(ga_popsize)]
     return population, buffer
 
+#bin-packing population init (permutation)
+def init_population_bin_packing():
+    num_items = len(ga_binpacking_items)
+    population = []
+    for _ in range(ga_popsize):
+        perm = list(range(num_items))
+        random.shuffle(perm)
+        population.append(Candidate(perm))
+    # Make a buffer of the same shape
+    buffer = [Candidate([0]*num_items) for _ in range(ga_popsize)]
+    return population, buffer
+
+# Placeholder for future ARC or other problems
+def init_population_arc():
+    """
+    Stub for a future problem (Kaggle’s ARC).
+    This function should create valid candidate representations for ARC.
+    """
+    raise NotImplementedError("ARC population initialization not yet implemented.")
+
+
+def init_population():
+    if ga_problem_type == "string":
+        return init_population_string()
+    elif ga_problem_type == "bin_packing":
+        return init_population_bin_packing()
+    elif ga_problem_type == "arc":
+        return init_population_arc()
+    else:
+        # fallback to string
+        return init_population_string()
+
 
 # -----------------------------------------------------------------------------
-# FITNESS UTILITIES
+# FITNESS UTILITIES FOR STRING MATCHING
 # -----------------------------------------------------------------------------
 def longest_common_subsequence(str1, str2):
     m, n = len(str1), len(str2)
@@ -271,7 +111,6 @@ def longest_common_subsequence(str1, str2):
             else:
                 dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
     return dp[m][n]
-
 
 def levenshtein_distance(str1, str2):
     len_str1, len_str2 = len(str1), len(str2)
@@ -286,13 +125,13 @@ def levenshtein_distance(str1, str2):
             dp[i][j] = min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
     return dp[len_str1][len_str2]
 
-
 def ulam_distance(s1, s2):
     if len(s1) != len(s2):
         raise ValueError("strings must be of equal length")
 
     if set(s1) != set(s2):
-        return levenshtein_distance(s1, s2), True  # fallback
+        # fallback to Levenshtein
+        return levenshtein_distance(s1, s2), True
 
     index_map = {char: idx for idx, char in enumerate(s2)}
     mapped_indices = [index_map[char] for char in s1]
@@ -318,44 +157,106 @@ def ulam_distance(s1, s2):
 
     return len(s1) - len(lis_tails), False
 
-
 def different_alleles(str1, str2):
     if len(str1) != len(str2):
         raise ValueError("strings must have equal length for different_alleles calculation")
     return sum(c1 != c2 for c1, c2 in zip(str1, str2))
 
 
-def calc_fitness(population):
-    if ga_config and ga_config.strategy:
-        return ga_config.strategy.calc_fitness(population)
-    # fallback to original code
-    target = ga_target
-    target_length = len(target)
-    for candidate in population:
-        if ga_fitness_mode == "ascii":
-            fitness = 0
-            for i in range(target_length):
-                fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
+# -----------------------------------------------------------------------------
+# FITNESS FOR BIN PACKING (1D)
+# -----------------------------------------------------------------------------
+def calc_fitness_bin_packing(candidate_perm):
+    """
+    Each candidate.gene is a permutation of item indices.
+    We'll place items in bins in the order given by the permutation.
 
-        elif ga_fitness_mode == "lcs":
-            lcs_len = longest_common_subsequence(candidate.gene, target)
-            fitness = target_length - lcs_len
+    fitness = (number_of_bins) + alpha * (total_wasted_space / bin_capacity)
 
-        elif ga_fitness_mode == "combined":
-            ascii_fit = 0
-            for i in range(target_length):
-                ascii_fit += abs(ord(candidate.gene[i]) - ord(target[i]))
-            lcs_len = longest_common_subsequence(candidate.gene, target)
-            lcs_fit = target_length - lcs_len
-            fitness = ascii_fit + ga_lcs_bonus * lcs_fit
+    Lower fitness is better.
+    """
+    bin_capacity = ga_binpacking_bin_capacity
+    alpha = ga_binpacking_alpha
+    items = ga_binpacking_items
 
+    current_bin_space = bin_capacity
+    num_bins = 1
+    wasted = 0
+
+    for idx in candidate_perm:
+        size = items[idx]
+        if size <= current_bin_space:
+            # fits in current bin
+            current_bin_space -= size
         else:
-            # default fallback
-            fitness = 0
-            for i in range(target_length):
-                fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
+            # open a new bin
+            wasted += current_bin_space
+            num_bins += 1
+            current_bin_space = bin_capacity - size
 
-        candidate.fitness = fitness
+    # account for leftover in the final bin
+    wasted += current_bin_space
+    return num_bins + alpha * (wasted / bin_capacity)
+
+
+# -----------------------------------------------------------------------------
+# MASTER FITNESS FUNCTION DISPATCH
+# -----------------------------------------------------------------------------
+def calc_fitness(population):
+    """
+    If problem_type == 'string', use old logic: ASCII, LCS, combined, etc.
+    If problem_type == 'bin_packing', use bin packing formula.
+    (For ARC or other expansions, add more clauses.)
+    """
+    if ga_problem_type == "bin_packing":
+        # BIN PACKING
+        for candidate in population:
+            candidate.fitness = calc_fitness_bin_packing(candidate.gene)
+        return
+
+    elif ga_problem_type == "string":
+        target = ga_target
+        target_length = len(target)
+        for candidate in population:
+            if ga_fitness_mode == "ascii":
+                fitness = 0
+                for i in range(target_length):
+                    fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
+                candidate.fitness = fitness
+
+            elif ga_fitness_mode == "lcs":
+                lcs_len = longest_common_subsequence(candidate.gene, target)
+                candidate.fitness = target_length - lcs_len
+
+            elif ga_fitness_mode == "combined":
+                ascii_fit = 0
+                for i in range(target_length):
+                    ascii_fit += abs(ord(candidate.gene[i]) - ord(target[i]))
+                lcs_len = longest_common_subsequence(candidate.gene, target)
+                lcs_fit = target_length - lcs_len
+                candidate.fitness = ascii_fit + ga_lcs_bonus * lcs_fit
+
+            else:
+                # default fallback is ASCII
+                fitness = 0
+                for i in range(target_length):
+                    fitness += abs(ord(candidate.gene[i]) - ord(target[i]))
+                candidate.fitness = fitness
+
+    else:
+        # Fallback or future extension
+        # For now, just do a simple "Hamming distance" if we get an unknown problem
+        for candidate in population:
+            # fallback if we can't interpret candidate.gene
+            if isinstance(candidate.gene, str) and len(candidate.gene) == len(ga_target):
+                # Hamming distance against ga_target
+                candidate.fitness = sum(
+                    1 for i in range(len(ga_target))
+                    if candidate.gene[i] != ga_target[i]
+                )
+            else:
+                # arbitrary fallback
+                candidate.fitness = random.random() * 1000
 
 
 def sort_by_fitness(population):
@@ -369,26 +270,21 @@ def linear_scale_fitness(population, max_ratio=2.0):
     raw_fitnesses = [c.fitness for c in population]
     f_min = min(raw_fitnesses)
     f_max = max(raw_fitnesses)
-    #if entire population has the same fitness, no scaling needed
     if abs(f_max - f_min) < 1e-9:
         for c in population:
-            c.scaled_fitness = 1.0  # all equal
+            c.scaled_fitness = 1.0
         return
-    #want "larger scaled_fitness" to mean better so we invert scores
-    #invert: score = (f_max - raw_fitness)
-    scores = [f_max - f for f in raw_fitnesses]
+    scores = [f_max - f for f in raw_fitnesses]  # invert so bigger -> better
     score_min, score_max = min(scores), max(scores)
     base_values = [s - score_min for s in scores]
     base_max = score_max - score_min
     base_avg = sum(base_values) / len(base_values) if len(base_values) > 0 else 0.0
     if abs(base_max) < 1e-9:
-        #everyone effectively identical after inversion
         for c in population:
             c.scaled_fitness = 1.0
         return
 
     ratio = (base_max / base_avg) if base_avg > 1e-9 else 1.0
-    #if ratio > max_ratio, scale down
     if ratio > max_ratio:
         a = max_ratio / ratio
     else:
@@ -397,7 +293,6 @@ def linear_scale_fitness(population, max_ratio=2.0):
     for i, c in enumerate(population):
         c.scaled_fitness = a * base_values[i]
 
-    # final safety check if everything is zero
     total_scaled = sum(c.scaled_fitness for c in population)
     if total_scaled < 1e-9:
         for c in population:
@@ -411,7 +306,6 @@ def rws_select_one(population):
     total = sum(c.scaled_fitness for c in population)
     if total < 1e-9:
         return random.choice(population)
-
     pick = random.random() * total
     running = 0.0
     for c in population:
@@ -419,7 +313,6 @@ def rws_select_one(population):
         if running >= pick:
             return c
     return population[-1]
-
 
 def sus_select_parents(population, num_parents):
     total = sum(c.scaled_fitness for c in population)
@@ -431,24 +324,22 @@ def sus_select_parents(population, num_parents):
     chosen = []
     running_sum = 0.0
     idx = 0
-    for i in range(num_parents):
-        pointer = start + i * distance
+    for _ in range(num_parents):
+        pointer = start + _ * distance
         while running_sum < pointer and idx < len(population) - 1:
             running_sum += population[idx].scaled_fitness
             idx += 1
         chosen.append(population[idx - 1])
     return chosen
 
-
 def tournament_deterministic_select_one(population, k=2):
     contenders = random.sample(population, k)
-    contenders.sort(key=lambda c: c.fitness)  # best = lowest
+    contenders.sort(key=lambda c: c.fitness)
     return contenders[0]
-
 
 def tournament_probabilistic_select_one(population, k=2, p=0.75):
     contenders = random.sample(population, k)
-    contenders.sort(key=lambda c: c.fitness)  # best first
+    contenders.sort(key=lambda c: c.fitness)
     r = random.random()
     cumulative = 0.0
     for i, cand in enumerate(contenders):
@@ -457,7 +348,6 @@ def tournament_probabilistic_select_one(population, k=2, p=0.75):
         if r <= cumulative:
             return cand
     return contenders[-1]
-
 
 def old_roulette_wheel_select(candidates):
     inv_fitnesses = [1.0 / (1.0 + c.fitness) for c in candidates]
@@ -470,65 +360,205 @@ def old_roulette_wheel_select(candidates):
             return candidates[i]
     return candidates[-1]
 
-
 def select_one_parent(population):
-    """
-    Master selection function that picks ONE parent
-    using ga_selection_method. If we are doing RWS/SUS, we must ensure
-    .scaled_fitness is defined. If linear_scaling is off, we define
-    scaled_fitness = 1/(1+fitness) as a fallback.
-    """
     method = ga_selection_method.lower()
-
     if method == "rws":
         return rws_select_one(population)
     elif method == "sus":
-        # If we want exactly 1 parent, pick from the list that SUS returns
         return sus_select_parents(population, 1)[0]
     elif method == "tournament_deterministic":
         return tournament_deterministic_select_one(population, ga_tournament_k)
     elif method == "tournament_probabilistic":
         return tournament_probabilistic_select_one(population, ga_tournament_k_prob, ga_tournament_p)
     else:
-        # Fallback to old method
         return old_roulette_wheel_select(population)
 
 
 # -----------------------------------------------------------------------------
-# CROSSOVER + MUTATION
+# CROSSOVER OPERATORS (STRING-BASED)
 # -----------------------------------------------------------------------------
-def single_point_crossover(parent1, parent2, target_length):
-    crossover_point = random.randint(0, target_length - 1)
-    child1 = parent1.gene[:crossover_point] + parent2.gene[crossover_point:]
-    child2 = parent2.gene[:crossover_point] + parent1.gene[crossover_point:]
-    return child1, child2
+def single_point_crossover_str(parent1, parent2, length):
+    point = random.randint(0, length - 1)
+    c1 = parent1.gene[:point] + parent2.gene[point:]
+    c2 = parent2.gene[:point] + parent1.gene[point:]
+    return c1, c2
 
+def two_point_crossover_str(parent1, parent2, length):
+    p1, p2 = sorted(random.sample(range(length), 2))
+    c1 = (parent1.gene[:p1] + parent2.gene[p1:p2] + parent1.gene[p2:])
+    c2 = (parent2.gene[:p1] + parent1.gene[p1:p2] + parent2.gene[p2:])
+    return c1, c2
 
-def two_point_crossover(parent1, parent2, target_length):
-    point1, point2 = sorted(random.sample(range(target_length), 2))
-    child1 = (parent1.gene[:point1] +
-              parent2.gene[point1:point2] +
-              parent1.gene[point2:])
-    child2 = (parent2.gene[:point1] +
-              parent1.gene[point1:point2] +
-              parent2.gene[point2:])
-    return child1, child2
-
-
-def uniform_crossover(parent1, parent2, target_length):
-    child1_gene = []
-    child2_gene = []
-    for i in range(target_length):
+def uniform_crossover_str(parent1, parent2, length):
+    c1 = []
+    c2 = []
+    for i in range(length):
         if random.random() < 0.5:
-            child1_gene.append(parent1.gene[i])
-            child2_gene.append(parent2.gene[i])
+            c1.append(parent1.gene[i])
+            c2.append(parent2.gene[i])
         else:
-            child1_gene.append(parent2.gene[i])
-            child2_gene.append(parent1.gene[i])
-    return ''.join(child1_gene), ''.join(child2_gene)
+            c1.append(parent2.gene[i])
+            c2.append(parent1.gene[i])
+    return ''.join(c1), ''.join(c2)
 
 
-def mutate(candidate):
+# -----------------------------------------------------------------------------
+# CROSSOVER OPERATORS (PERMUTATION-BASED)
+# -----------------------------------------------------------------------------
+def pmx_crossover_perm(p1, p2):
+    """
+    PMX crossover for permutations. p1, p2 are lists of ints.
+    Returns two children as lists of ints.
+    """
+    length = len(p1)
+    c1, c2 = [None]*length, [None]*length
+    cxpoint1, cxpoint2 = sorted(random.sample(range(length), 2))
+
+    # copy the slice
+    for i in range(cxpoint1, cxpoint2):
+        c1[i] = p1[i]
+        c2[i] = p2[i]
+
+    # fill the rest
+    def pmx_fill(c, donor, start, end):
+        for i in range(start, end):
+            if donor[i] not in c:
+                pos = i
+                val = donor[i]
+                while c[pos] is not None:
+                    pos = donor.index(p1[pos])  # or p2 if c==c2
+                c[pos] = val
+
+    pmx_fill(c1, p2, cxpoint1, cxpoint2)
+    pmx_fill(c2, p1, cxpoint1, cxpoint2)
+
+    # fill remaining None with direct copy
+    for i in range(length):
+        if c1[i] is None:
+            c1[i] = p2[i]
+        if c2[i] is None:
+            c2[i] = p1[i]
+    return c1, c2
+
+def ox_crossover_perm(p1, p2):
+    """
+    Ordered Crossover (OX) for permutations.
+    """
+    length = len(p1)
+    c1, c2 = [None]*length, [None]*length
+    start, end = sorted(random.sample(range(length), 2))
+
+    # copy slice
+    c1[start:end] = p1[start:end]
+    c2[start:end] = p2[start:end]
+
+    # fill the rest in order
+    def fill_ox(child, parent, start, end):
+        pos = end
+        if pos >= length:
+            pos = 0
+        for x in parent:
+            if x not in child:
+                child[pos] = x
+                pos += 1
+                if pos >= length:
+                    pos = 0
+
+    fill_ox(c1, p2, start, end)
+    fill_ox(c2, p1, start, end)
+    return c1, c2
+
+def cx_crossover_perm(p1, p2):
+    """
+    Cycle Crossover (CX) for permutations.
+    """
+    length = len(p1)
+    c1, c2 = [None]*length, [None]*length
+    # start cycle from index 0
+    index = 0
+    cycle = 1
+    used = set()
+
+    while True:
+        if index in used:
+            # find next free index
+            free_positions = [i for i in range(length) if i not in used]
+            if not free_positions:
+                break
+            index = free_positions[0]
+            cycle += 1
+        start = index
+        val1 = p1[index]
+        while True:
+            c1[index] = p1[index]
+            c2[index] = p2[index]
+            used.add(index)
+            index = p1.index(p2[index])
+            if p1[index] == val1:
+                c1[index] = p1[index]
+                c2[index] = p2[index]
+                used.add(index)
+                break
+
+    # fill any None with parent's genes
+    for i in range(length):
+        if c1[i] is None:
+            c1[i] = p2[i]
+        if c2[i] is None:
+            c2[i] = p1[i]
+    return c1, c2
+
+
+# -----------------------------------------------------------------------------
+# MASTER CROSSOVER DISPATCH
+# -----------------------------------------------------------------------------
+def crossover_operator(parent1, parent2):
+    """
+    If ga_problem_type = 'string', we use the string crossovers.
+    If ga_problem_type = 'bin_packing', we use PMX/OX/CX (permutation).
+    Fallbacks: 'single' for string-based if invalid, 'cx' for permutations if invalid.
+    """
+    if ga_problem_type == "string":
+        length = len(parent1.gene)
+        if ga_crossover_method == "single":
+            return single_point_crossover_str(parent1, parent2, length)
+        elif ga_crossover_method == "two_point":
+            return two_point_crossover_str(parent1, parent2, length)
+        elif ga_crossover_method == "uniform":
+            return uniform_crossover_str(parent1, parent2, length)
+        else:
+            # fallback
+            return single_point_crossover_str(parent1, parent2, length)
+
+    elif ga_problem_type == "bin_packing":
+        p1 = parent1.gene
+        p2 = parent2.gene
+        if ga_crossover_method == "pmx":
+            return pmx_crossover_perm(p1, p2)
+        elif ga_crossover_method == "ox":
+            return ox_crossover_perm(p1, p2)
+        elif ga_crossover_method == "cx":
+            return cx_crossover_perm(p1, p2)
+        else:
+            # fallback to cycle
+            return cx_crossover_perm(p1, p2)
+
+    else:
+        # fallback
+        # if it's a string in unknown domain, do single-point
+        # if it's a list, do cycle
+        if isinstance(parent1.gene, str):
+            return single_point_crossover_str(parent1, parent2, len(parent1.gene))
+        elif isinstance(parent1.gene, list):
+            return cx_crossover_perm(parent1.gene, parent2.gene)
+        # otherwise no idea
+        return parent1.gene, parent2.gene
+
+
+# -----------------------------------------------------------------------------
+# MUTATION OPERATORS (STRING-BASED)
+# -----------------------------------------------------------------------------
+def mutate_string(candidate):
     target_length = len(ga_target)
     pos = random.randint(0, target_length - 1)
     delta = random.randint(32, 121)
@@ -540,13 +570,106 @@ def mutate(candidate):
 
 
 # -----------------------------------------------------------------------------
+# MUTATION OPERATORS (PERMUTATION-BASED)
+# -----------------------------------------------------------------------------
+def exchange_mutation(candidate):
+    """
+    Simple swap mutation. Fallback that works for any permutation length >= 2.
+    """
+    gene = candidate.gene
+    if len(gene) < 2:
+        return
+    i, j = random.sample(range(len(gene)), 2)
+    gene[i], gene[j] = gene[j], gene[i]
+
+def displacement_mutation(candidate):
+    """
+    Removes one element and inserts it at a random position.
+    """
+    gene = candidate.gene
+    i = random.randint(0, len(gene)-1)
+    elem = gene.pop(i)
+    j = random.randint(0, len(gene))
+    gene.insert(j, elem)
+
+def insertion_mutation(candidate):
+    """
+    Also known as 'insert mutation':
+    pick two positions, remove the element at i and insert before j.
+    """
+    gene = candidate.gene
+    i = random.randint(0, len(gene)-1)
+    elem = gene.pop(i)
+    j = random.randint(0, len(gene))
+    gene.insert(j, elem)
+
+def simple_inversion_mutation(candidate):
+    """
+    Reverse a substring of the permutation.
+    """
+    gene = candidate.gene
+    start, end = sorted(random.sample(range(len(gene)), 2))
+    gene[start:end] = reversed(gene[start:end])
+
+def scramble_mutation(candidate):
+    """
+    Scramble the elements in a random substring.
+    """
+    gene = candidate.gene
+    start, end = sorted(random.sample(range(len(gene)), 2))
+    subset = gene[start:end]
+    random.shuffle(subset)
+    gene[start:end] = subset
+
+
+# -----------------------------------------------------------------------------
+# MASTER MUTATION DISPATCH
+# -----------------------------------------------------------------------------
+# Let’s define a new global or “semi-global” for mutation operator if you like
+ga_mutation_operator = "exchange"  # fallback operator for permutations
+
+def mutate(candidate):
+    """
+    If problem_type = 'string', do the original ASCII-based mutation.
+    If problem_type = 'bin_packing', choose among displacement, exchange,
+    insertion, simple_inversion, scramble, etc. Fallback = exchange.
+    """
+    if ga_problem_type == "string":
+        mutate_string(candidate)
+    elif ga_problem_type == "bin_packing":
+        # pick mutation operator from ga_mutation_operator
+        if ga_mutation_operator == "displacement":
+            displacement_mutation(candidate)
+        elif ga_mutation_operator == "insertion":
+            insertion_mutation(candidate)
+        elif ga_mutation_operator == "simple_inversion":
+            simple_inversion_mutation(candidate)
+        elif ga_mutation_operator == "scramble":
+            scramble_mutation(candidate)
+        elif ga_mutation_operator == "exchange":
+            exchange_mutation(candidate)
+        else:
+            # fallback
+            exchange_mutation(candidate)
+    else:
+        # fallback
+        if isinstance(candidate.gene, str):
+            mutate_string(candidate)
+        elif isinstance(candidate.gene, list):
+            exchange_mutation(candidate)
+        else:
+            # do nothing
+            pass
+
+
+# -----------------------------------------------------------------------------
 # ELITISM
 # -----------------------------------------------------------------------------
 def elitism(population, buffer, elite_size):
     for i in range(elite_size):
-        buffer[i].gene = population[i].gene
+        buffer[i].gene = population[i].gene[:]
         buffer[i].fitness = population[i].fitness
-        buffer[i].age = population[i].age + 1  # Surviving => increment age
+        buffer[i].age = population[i].age + 1
 
 
 # -----------------------------------------------------------------------------
@@ -555,22 +678,11 @@ def elitism(population, buffer, elite_size):
 def apply_aging_replacement(population):
     if not ga_use_aging:
         return
-    target_length = len(ga_target)
     for i in range(len(population)):
         if population[i].age > ga_age_limit:
-            # pick two parents
             parent1 = select_one_parent(population)
             parent2 = select_one_parent(population)
-
-            if ga_crossover_method == "single":
-                c1, _ = single_point_crossover(parent1, parent2, target_length)
-            elif ga_crossover_method == "two_point":
-                c1, _ = two_point_crossover(parent1, parent2, target_length)
-            elif ga_crossover_method == "uniform":
-                c1, _ = uniform_crossover(parent1, parent2, target_length)
-            else:
-                c1, _ = single_point_crossover(parent1, parent2, target_length)
-
+            c1, _ = crossover_operator(parent1, parent2)
             new_cand = Candidate(c1, fitness=0)
             new_cand.age = 0
             population[i] = new_cand
@@ -581,7 +693,6 @@ def apply_aging_replacement(population):
 # -----------------------------------------------------------------------------
 def mate(population, buffer):
     elite_size = int(ga_popsize * ga_elitrate)
-    target_length = len(ga_target)
 
     # 1) Elitism
     elitism(population, buffer, elite_size)
@@ -592,60 +703,51 @@ def mate(population, buffer):
         if ga_use_linear_scaling:
             linear_scale_fitness(population, ga_max_fitness_ratio)
         else:
-            # fallback so scaled_fitness is defined
             for c in population:
                 c.scaled_fitness = 1.0 / (1.0 + c.fitness)
 
-    # 3) Fill remainder of buffer
+    # 3) Fill the remainder
     i = elite_size
     while i < ga_popsize - 1:
         parent1 = select_one_parent(population)
         parent2 = select_one_parent(population)
 
-        # domain-specific crossover
-        if ga_config and ga_config.strategy:
-            child1, child2 = ga_config.strategy.crossover(parent1, parent2)
-        else:
-            child1, child2 = single_point_crossover(parent1, parent2, target_length)
+        child1, child2 = crossover_operator(parent1, parent2)
 
-        buffer[i].gene = child1
+        # Copy children into buffer
+        if isinstance(child1, list):
+            buffer[i].gene = child1[:]
+        else:
+            buffer[i].gene = child1
         buffer[i].fitness = 0
         buffer[i].age = 0
-        buffer[i + 1].gene = child2
-        buffer[i + 1].fitness = 0
-        buffer[i + 1].age = 0
+
+        if isinstance(child2, list):
+            buffer[i+1].gene = child2[:]
+        else:
+            buffer[i+1].gene = child2
+        buffer[i+1].fitness = 0
+        buffer[i+1].age = 0
 
         if random.random() < ga_mutationrate:
-            if ga_config and ga_config.strategy:
-                ga_config.strategy.mutate(buffer[i])
-            else:
-                mutate(buffer[i])
+            mutate(buffer[i])
         if random.random() < ga_mutationrate:
-            if ga_config and ga_config.strategy:
-                ga_config.strategy.mutate(buffer[i + 1])
-            else:
-                mutate(buffer[i + 1])
+            mutate(buffer[i + 1])
 
         i += 2
 
-    # Handle odd count
+    # 4) If population size is odd, copy the last one
     if ga_popsize % 2 == 1 and i < ga_popsize:
         buffer[i].gene = buffer[i - 1].gene
         buffer[i].fitness = buffer[i - 1].fitness
         buffer[i].age = buffer[i - 1].age
         if random.random() < ga_mutationrate:
-            if ga_config and ga_config.strategy:
-                ga_config.strategy.mutate(buffer[i])
-            else:
-                mutate(buffer[i])
+            mutate(buffer[i])
 
-    # 4) Aging-based replacement
+    # 5) Aging-based replacement
     apply_aging_replacement(buffer)
 
 
-# -----------------------------------------------------------------------------
-# SWAP, PRINT, AND STATISTICS
-# -----------------------------------------------------------------------------
 def swap(population, buffer):
     return buffer, population
 
@@ -655,6 +757,9 @@ def print_best(population):
     print(f"best: {best.gene} ({best.fitness}) age={best.age}")
 
 
+# -----------------------------------------------------------------------------
+# STATISTICS, DIVERSITY, TIMING
+# -----------------------------------------------------------------------------
 def compute_fitness_statistics(population):
     fitness_values = [cand.fitness for cand in population]
     mean_fitness = sum(fitness_values) / len(fitness_values)
@@ -692,7 +797,6 @@ def compute_fitness_statistics(population):
     }
     return stats
 
-
 def compute_timing_metrics(generation_start_cpu, overall_start_wall):
     current_cpu = time.process_time()
     current_wall = time.time()
@@ -700,7 +804,6 @@ def compute_timing_metrics(generation_start_cpu, overall_start_wall):
     elapsed_time = current_wall - overall_start_wall
     raw_ticks = time.perf_counter_ns()
     ticks_per_second = time.get_clock_info('perf_counter').resolution
-
     return {
         "generation_cpu_time": generation_cpu_time,
         "elapsed_time": elapsed_time,
@@ -709,85 +812,102 @@ def compute_timing_metrics(generation_start_cpu, overall_start_wall):
     }
 
 
-# -----------------------------------------------------------------------------
-# DIVERSITY METRICS
-# -----------------------------------------------------------------------------
 def calculate_avg_different_alleles(population):
-    total_diff = 0
-    count = 0
-    for i in range(len(population)):
-        for j in range(i + 1, len(population)):
-            total_diff += different_alleles(population[i].gene, population[j].gene)
-            count += 1
-    if count == 0:
+    """
+    For strings, measure allele differences. For permutations, fallback to partial measure, or skip.
+    If all are the same representation, proceed. If mixing, just skip.
+    """
+    # If string-based:
+    if ga_problem_type == "string" and len(population) >= 2:
+        total_diff = 0
+        count = 0
+        for i in range(len(population)):
+            for j in range(i + 1, len(population)):
+                total_diff += different_alleles(population[i].gene, population[j].gene)
+                count += 1
+        if count == 0:
+            return 0
+        return total_diff / count
+    else:
+        # You may define a measure for permutations or skip if not needed
+        # e.g., the average # of positions that differ among permutations
         return 0
-    return total_diff / count
-
 
 def calculate_avg_population_distance(population, distance_metric="levenshtein"):
     global ga_distance_metric
-    total_distance = 0
-    count = 0
-    used_levenshtein_fallback = False
+    if ga_problem_type == "string":
+        total_distance = 0
+        count = 0
+        used_levenshtein_fallback = False
+        pop_size = len(population)
+        sample_size = min(50, pop_size)
+        if pop_size <= sample_size:
+            sample = population
+        else:
+            elite_size = max(1, int(0.1 * sample_size))
+            sample = population[:elite_size] + random.sample(population[elite_size:], sample_size - elite_size)
 
-    pop_size = len(population)
-    sample_size = min(50, pop_size)
-    if pop_size <= sample_size:
-        sample = population
-    else:
-        elite_size = max(1, int(0.1 * sample_size))
-        sample = population[:elite_size] + random.sample(population[elite_size:], sample_size - elite_size)
-
-    for i in range(len(sample)):
-        for j in range(i + 1, len(sample)):
-            if distance_metric == "ulam":
-                if len(sample[i].gene) == len(sample[j].gene):
-                    try:
-                        dist, fallback = ulam_distance(sample[i].gene, sample[j].gene)
-                        if fallback:
+        for i in range(len(sample)):
+            for j in range(i + 1, len(sample)):
+                if distance_metric == "ulam":
+                    if len(sample[i].gene) == len(sample[j].gene):
+                        try:
+                            dist, fallback = ulam_distance(sample[i].gene, sample[j].gene)
+                            if fallback:
+                                used_levenshtein_fallback = True
+                        except ValueError:
+                            dist = levenshtein_distance(sample[i].gene, sample[j].gene)
                             used_levenshtein_fallback = True
-                    except ValueError:
+                    else:
                         dist = levenshtein_distance(sample[i].gene, sample[j].gene)
                         used_levenshtein_fallback = True
                 else:
                     dist = levenshtein_distance(sample[i].gene, sample[j].gene)
-                    used_levenshtein_fallback = True
-            else:
-                dist = levenshtein_distance(sample[i].gene, sample[j].gene)
-            total_distance += dist
-            count += 1
+                total_distance += dist
+                count += 1
 
-    if used_levenshtein_fallback and distance_metric == "ulam":
-        ga_distance_metric = "levenshtein"
-        print("Warning: Had to fall back to Levenshtein distance because Ulam conditions were not met")
+        if used_levenshtein_fallback and distance_metric == "ulam":
+            ga_distance_metric = "levenshtein"
+            print("Warning: Had to fall back to Levenshtein distance (Ulam conditions not met).")
 
-    if count == 0:
-        return 0, ga_distance_metric
-    return total_distance / count, ga_distance_metric
+        if count == 0:
+            return 0, ga_distance_metric
+        return total_distance / count, ga_distance_metric
+
+    else:
+        # For bin_packing or other problem, you may define a distance measure or skip
+        return 0, distance_metric
 
 
 def calculate_avg_shannon_entropy(population):
+    """
+    For string-based GA, we measure position-by-position entropy.
+    For permutations, skip or define a separate measure if desired.
+    """
     if not population:
         return 0.0
-    gene_length = len(population[0].gene)
-    position_entropies = []
-    for position in range(gene_length):
-        position_chars = [candidate.gene[position] for candidate in population]
-        char_count = {}
-        for char in position_chars:
-            char_count[char] = char_count.get(char, 0) + 1
-
-        entropy = 0.0
-        pop_size = len(population)
-        for count in char_count.values():
-            probability = count / pop_size
-            entropy -= probability * math.log2(probability)
-        position_entropies.append(entropy)
-    return sum(position_entropies) / gene_length
+    if ga_problem_type == "string":
+        gene_length = len(population[0].gene)
+        position_entropies = []
+        for position in range(gene_length):
+            position_chars = [cand.gene[position] for cand in population]
+            char_count = {}
+            for ch in position_chars:
+                char_count[ch] = char_count.get(ch, 0) + 1
+            entropy = 0.0
+            pop_size = len(population)
+            for c_count in char_count.values():
+                p = c_count / pop_size
+                entropy -= p * math.log2(p)
+            position_entropies.append(entropy)
+        return sum(position_entropies) / gene_length
+    else:
+        # For permutations or other domains, we can define a custom measure or skip
+        return 0.0
 
 
 # -----------------------------------------------------------------------------
-# VISUALIZATIONS (RESTORED 1:1 WITH ORIGINAL)
+# VISUALIZATIONS (UNCHANGED)
 # -----------------------------------------------------------------------------
 def plot_fitness_evolution(best_history, mean_history, worst_history):
     generations = list(range(len(best_history)))
@@ -866,12 +986,10 @@ def plot_entropy_evolution(entropy_history, allele_diff_history, distance_histor
     generations = list(range(len(entropy_history)))
     plt.figure(figsize=(14, 8))
 
-    # EXACT color usage as your original code
     plt.plot(generations, entropy_history, label="Shannon Entropy", linewidth=2, color='purple')
     plt.plot(generations, allele_diff_history, label="Avg Different Alleles", linewidth=2, color='red')
     plt.plot(generations, distance_history, label="Avg Levenshtein Distance", linewidth=2, color='blue')
 
-    # Annotate at 10 points if length > 1
     if len(generations) > 1:
         label_points = [int(i * (len(generations) - 1) / 9) for i in range(10)]
         for idx in label_points:
@@ -910,31 +1028,51 @@ def plot_entropy_evolution(entropy_history, allele_diff_history, distance_histor
 # GA EXECUTION (PROGRAMMATIC ENTRY POINT)
 # -----------------------------------------------------------------------------
 def run_ga(
-    crossover_method="two_point",
-    fitness_mode="combined",
-    lcs_bonus=5,
-    mutation_rate=0.55,
-    population_size=500,
-    max_runtime=120,
-    distance_metric="levenshtein",
-    selection_method="rws",
-    use_linear_scaling=True,
-    max_fitness_ratio=2.0,
-    use_aging=False,
-    age_limit=100,
-    tournament_k=3,
-    tournament_k_prob=3,
-    tournament_p=0.75,
-    problem_data=None
+        problem_type="string",          # NEW: "string" or "bin_packing" or "arc"
+        crossover_method="two_point",   # for strings: "single", "two_point", "uniform"
+        # for permutations: "pmx", "ox", "cx"
+        fitness_mode="combined",        # string-based: "ascii", "lcs", "combined"
+        lcs_bonus=5,
+        mutation_rate=0.55,
+        population_size=500,
+        max_runtime=120,
+        distance_metric="levenshtein",  # string-based only
+        selection_method="rws",
+        use_linear_scaling=True,
+        max_fitness_ratio=2.0,
+        use_aging=False,
+        age_limit=100,
+        tournament_k=3,
+        tournament_k_prob=3,
+        tournament_p=0.75,
+        # Extra bin-packing config if needed:
+        binpacking_items=None,
+        binpacking_bin_capacity=15,
+        binpacking_alpha=0.5,
+        # Which mutation operator for permutations
+        mutation_operator="exchange"
 ):
     """
     Run the GA with the specified settings, returning a dict of stats.
+    This includes a new 'problem_type' argument that selects domain-specific logic.
+
+    For 1D bin packing:
+      - problem_type="bin_packing"
+      - ga_binpacking_items, ga_binpacking_bin_capacity, ga_binpacking_alpha can be set here
+      - crossover_method can be "pmx", "ox", or "cx"
+      - mutation_operator can be "exchange", "displacement", "insertion", "simple_inversion", "scramble"
+
+    For future expansions (ARC, etc.), define new problem logic and pass problem_type="arc".
     """
-    global ga_crossover_method, ga_fitness_mode, ga_lcs_bonus, ga_mutationrate
-    global ga_popsize, ga_distance_metric, ga_max_runtime
+    global ga_problem_type, ga_crossover_method, ga_fitness_mode, ga_lcs_bonus
+    global ga_mutationrate, ga_popsize, ga_distance_metric, ga_max_runtime
     global ga_selection_method, ga_use_linear_scaling, ga_max_fitness_ratio
     global ga_use_aging, ga_age_limit, ga_tournament_k, ga_tournament_k_prob, ga_tournament_p
+    global ga_binpacking_items, ga_binpacking_bin_capacity, ga_binpacking_alpha
+    global ga_mutation_operator
 
+    # Update global settings
+    ga_problem_type = problem_type
     ga_crossover_method = crossover_method
     ga_fitness_mode = fitness_mode
     ga_lcs_bonus = lcs_bonus
@@ -942,30 +1080,25 @@ def run_ga(
     ga_popsize = population_size
     ga_distance_metric = distance_metric
     ga_max_runtime = max_runtime
-
     ga_selection_method = selection_method
     ga_use_linear_scaling = use_linear_scaling
     ga_max_fitness_ratio = max_fitness_ratio
-
     ga_use_aging = use_aging
     ga_age_limit = age_limit
-
     ga_tournament_k = tournament_k
     ga_tournament_k_prob = tournament_k_prob
     ga_tournament_p = tournament_p
 
-    # create config, set strategy
-    global ga_config
-    if ga_config.problem_type == "bin_packing" and problem_data:
-        ga_config.bin_capacity = problem_data["capacity"]
-        ga_config.strategy = BinPacking1DStrategy(ga_config)
-        # Overwrite GA population size or item count if necessary
-        # Print known solution info
-        print(f"Running bin packing for problem {problem_data['id']} with best known = {problem_data['best_known']}")
-    else:
-        ga_config = GAConfig(problem_type="string_match")  # or "bin_packing"
-        ga_config.select_strategy()
+    # Bin-packing domain parameters
+    if binpacking_items is not None:
+        ga_binpacking_items = binpacking_items
+    ga_binpacking_bin_capacity = binpacking_bin_capacity
+    ga_binpacking_alpha = binpacking_alpha
 
+    # Mutation operator for permutations
+    ga_mutation_operator = mutation_operator
+
+    # Initialize RNG and population
     random.seed(time.time())
     population, buffer = init_population()
     overall_start_wall = time.time()
@@ -1004,8 +1137,13 @@ def run_ga(
         allele_diff_history.append(avg_diff_alleles)
         avg_shannon_entropy = calculate_avg_shannon_entropy(population)
         entropy_history.append(avg_shannon_entropy)
-        if stats['selection_variance'] >0:
-            stats['selection_variance']=stats['selection_variance'] * 10 ** (-math.floor(math.log10(stats['selection_variance'])))
+
+        # minor fix for printing selection_variance
+        if stats['selection_variance'] > 0:
+            # scale for printing convenience
+            factor = 10 ** (-math.floor(math.log10(stats['selection_variance'])))
+            stats['selection_variance'] = stats['selection_variance'] * factor
+
         print(
             f"Gen {iteration}: mean={stats['mean']:.2f}, std={stats['std']:.2f}, worst={stats['worst_fitness']}, "
             f"range={stats['fitness_range']}, selection_var={stats['selection_variance']:.4f}"
@@ -1026,6 +1164,7 @@ def run_ga(
         worst_history.append(stats['worst_fitness'])
         fitness_distributions.append([cand.fitness for cand in population])
 
+        # If solution found
         if population[0].fitness == 0:
             print("Target reached!")
             termination_reason = "solution_found"
@@ -1035,7 +1174,7 @@ def run_ga(
         mate(population, buffer)
         population, buffer = swap(population, buffer)
 
-    results = {
+    return {
         "best_fitness_history": best_history,
         "mean_fitness_history": mean_history,
         "worst_fitness_history": worst_history,
@@ -1046,91 +1185,11 @@ def run_ga(
         "converged_generation": converged_generation,
         "termination_reason": termination_reason
     }
-    if ga_config.problem_type == "bin_packing" and problem_data:
-        # Example: final bins might be read from final population
-        best_bins_used = population[0].fitness  # or however bin usage is tracked
-        print(f"Bins used: {best_bins_used}, Best known: {problem_data['best_known']}")
-        utilization = problem_data['capacity'] * best_bins_used
-        total_items_space = sum(problem_data['items'])
-        print(f"Total item space: {total_items_space}, Utilization: {total_items_space/utilization:.2f}")
-
-    return results
 
 
 # -----------------------------------------------------------------------------
-# MAIN (STANDALONE EXECUTION)
+# MAIN (STANDALONE EXECUTION) - STILL FOR STRING DEMO
 # -----------------------------------------------------------------------------
-def parse_binpack_file(filepath):
-    """
-    Parse a binpack1.txt file where the format is:
-    Number of test problems
-    For each problem: ID, bin capacity, number of items, best known solution
-    Then item sizes (one line per problem).
-    Returns a list of dicts with keys:
-       'id', 'capacity', 'num_items', 'best_known', 'items'
-    """
-    problems = []
-    with open(filepath, 'r') as f:
-        lines = [line.strip() for line in f if line.strip()]
-    idx = 0
-    total_problems = int(lines[idx]); idx += 1
-    for _ in range(total_problems):
-        parts = lines[idx].split()
-        idx += 1
-        prob_id = parts[0]
-        capacity = int(parts[1])
-        num_items = int(parts[2])
-        best_known = int(parts[3])
-        item_sizes = list(map(int, lines[idx].split()))
-        idx += 1
-        problems.append({
-            "id": prob_id,
-            "capacity": capacity,
-            "num_items": num_items,
-            "best_known": best_known,
-            "items": item_sizes
-        })
-    return problems
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="GA for string matching or bin packing.")
-    parser.add_argument("--problem_type", choices=["string_match","bin_packing"], default="string_match",
-                        help="Select the problem type.")
-    parser.add_argument("--binpack_file", type=str, default="binpack1.txt",
-                        help="Path to bin packing data file.")
-    parser.add_argument("--select_problem", type=str, default=None,
-                        help="Specify problem ID or index to run.")
-    # ...add more CLI arguments as needed (crossover, mutation, popsize, etc.)...
-    args = parser.parse_args()
-
-    if args.problem_type == "bin_packing":
-        binpack_data = parse_binpack_file(args.binpack_file)
-        # Optionally choose a problem by ID or index
-        chosen_problem = None
-        if args.select_problem is not None:
-            for i, pb in enumerate(binpack_data):
-                if pb["id"] == args.select_problem or str(i) == args.select_problem:
-                    chosen_problem = pb
-                    break
-            if not chosen_problem:
-                print(f"Problem '{args.select_problem}' not found, defaulting to first.")
-                chosen_problem = binpack_data[0]
-        else:
-            chosen_problem = binpack_data[0]
-        # ...store chosen_problem in a global or pass it to run_ga...
-        ga_config = GAConfig(problem_type="bin_packing")  # override default
-        # ...existing code...
-    else:
-        ga_config = GAConfig(problem_type="string_match")
-        # ...existing code...
-
-    # ...existing code that sets up other GA parameters from CLI...
-
-    # Finally run or call main
-    main()
-
 def main():
     random.seed(time.time())
     population, buffer = init_population()
@@ -1144,15 +1203,16 @@ def main():
     allele_diff_history = []
     distance_history = []
 
-    if ga_crossover_method not in ["single", "two_point", "uniform"]:
-        print("no crossover operator detected, using single-point crossover by default.")
-    else:
-        print(f"starting genetic algorithm with {ga_crossover_method} crossover...")
-
-    if ga_fitness_mode not in ["ascii", "lcs", "combined"]:
-        print("no fitness mode selected, defaulting to ascii")
-    else:
-        print(f"using fitness mode: {ga_fitness_mode}")
+    if ga_problem_type == "string":
+        # For strings, we might want single/two_point/uniform crossovers
+        print(f"starting genetic algorithm (string mode) with {ga_crossover_method} crossover...")
+        if ga_fitness_mode not in ["ascii", "lcs", "combined"]:
+            print("no fitness mode selected, defaulting to ascii")
+        else:
+            print(f"using fitness mode: {ga_fitness_mode}")
+    elif ga_problem_type == "bin_packing":
+        print("starting genetic algorithm (bin packing mode) ...")
+        print(f"crossover method = {ga_crossover_method}, mutation operator = {ga_mutation_operator}")
 
     print(f"Maximum runtime set to {ga_max_runtime} seconds")
     print(f"Using {ga_distance_metric} distance metric for population diversity")
@@ -1214,7 +1274,7 @@ def main():
     final_time = time.time() - overall_start_wall
     print(f"Total runtime: {final_time:.2f} seconds")
 
-    # Plot results (1:1 with original code style)
+    # Plot results
     plot_fitness_evolution(best_history, mean_history, worst_history)
     plot_fitness_boxplots(fitness_distributions)
     plot_entropy_evolution(entropy_history, allele_diff_history, distance_history)
@@ -1222,5 +1282,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
