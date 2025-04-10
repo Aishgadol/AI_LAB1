@@ -41,213 +41,9 @@ class Candidate:
 
 
 # -----------------------------------------------------------------------------
-# CONFIG & STRATEGIES (MODULAR)
-# -----------------------------------------------------------------------------
-class GAConfig:
-    def __init__(
-        self,
-        problem_type="string_match",
-        crossover_method="two_point",
-        mutation_method="swap",
-        fitness_mode="combined",
-        bin_capacity=100,
-        alpha=1.0
-        # ...any other relevant params...
-    ):
-        self.problem_type = problem_type
-        self.crossover_method = crossover_method
-        self.mutation_method = mutation_method
-        self.fitness_mode = fitness_mode
-        self.bin_capacity = bin_capacity
-        self.alpha = alpha
-        self.strategy = None  # will hold the chosen ProblemStrategy
-
-    def select_strategy(self):
-        if self.problem_type == "bin_packing":
-            self.strategy = BinPacking1DStrategy(self)
-        else:
-            # fallback to string matching
-            self.strategy = StringMatchingStrategy(self)
-
-
-class ProblemStrategy:
-    def __init__(self, config):
-        self.config = config
-
-    def init_population(self):
-        raise NotImplementedError("implement in subclass")
-
-    def calc_fitness(self, population):
-        raise NotImplementedError("implement in subclass")
-
-    def crossover(self, parent1, parent2):
-        raise NotImplementedError("implement in subclass")
-
-    def mutate(self, candidate):
-        raise NotImplementedError("implement in subclass")
-
-    # Optionally, define fallback or utility crossovers/mutations below.
-
-
-class StringMatchingStrategy(ProblemStrategy):
-    def __init__(self, config):
-        super().__init__(config)
-
-    def init_population(self):
-        # ...existing string-based initialization code...
-        # re-use init_population for string matching
-        return init_population()  # still calls the old function
-
-    def calc_fitness(self, population):
-        # ...existing code...
-        return calc_fitness(population)
-
-    def crossover(self, parent1, parent2):
-        # fallback to existing crossovers
-        # (single_point, two_point, uniform), else default to single_point
-        method = self.config.crossover_method.lower()
-        target_length = len(parent1.gene)
-        if method == "two_point":
-            return two_point_crossover(parent1, parent2, target_length)
-        elif method == "uniform":
-            return uniform_crossover(parent1, parent2, target_length)
-        else:
-            return single_point_crossover(parent1, parent2, target_length)
-
-    def mutate(self, candidate):
-        # fallback to existing mutate, or do swap if needed
-        # fallback to the old mutate method for string problems
-        mutate(candidate)
-
-
-class BinPacking1DStrategy(ProblemStrategy):
-    def __init__(self, config):
-        super().__init__(config)
-
-    def init_population(self):
-        # Example: represent each candidate as a permutation of item indices
-        # For demonstration, just re-use an existing structure or define new logic
-        # We show minimal code here:
-        pop = []
-        for _ in range(ga_popsize):
-            items = list(range(50))  # example: 50 items for bin packing
-            random.shuffle(items)
-            pop.append(Candidate(items))
-        buffer = [Candidate([]) for _ in range(ga_popsize)]
-        return pop, buffer
-
-    def calc_fitness(self, population):
-        # fitness = num_bins + alpha * (wasted_space / bin_capacity)
-        for cand in population:
-            # example naive bin packing
-            total_bins, wasted = self.simple_bin_pack(cand.gene, self.config.bin_capacity)
-            cand.fitness = total_bins + self.config.alpha * (wasted / self.config.bin_capacity)
-
-    def crossover(self, parent1, parent2):
-        # Provide any permutation-based crossovers: PMX, OX, CX (fallback)
-        method = self.config.crossover_method.lower()
-        if method == "pmx":
-            return pmx_crossover(parent1.gene, parent2.gene)
-        elif method == "ox":
-            return ox_crossover(parent1.gene, parent2.gene)
-        elif method == "cx":
-            return cycle_crossover(parent1.gene, parent2.gene)
-        else:
-            # fallback to cycle crossover
-            return cycle_crossover(parent1.gene, parent2.gene)
-
-    def mutate(self, candidate):
-        # Provide fallback to 'swap' if invalid
-        method = self.config.mutation_method.lower()
-        if method == "displacement":
-            displacement_mutation(candidate.gene)
-        elif method == "insertion":
-            insertion_mutation(candidate.gene)
-        elif method == "inversion":
-            inversion_mutation(candidate.gene)
-        elif method == "scramble":
-            scramble_mutation(candidate.gene)
-        elif method == "swap":
-            swap_mutation(candidate.gene)
-        else:
-            swap_mutation(candidate.gene)  # fallback
-
-    def simple_bin_pack(self, items, capacity):
-        # minimal bin packing logic for demonstration:
-        current_bin_space = capacity
-        total_bins = 1
-        wasted = 0
-        for it in items:
-            size = 1  # assume item size=1
-            if size > current_bin_space:
-                wasted += current_bin_space
-                total_bins += 1
-                current_bin_space = capacity - size
-            else:
-                current_bin_space -= size
-        wasted += current_bin_space
-        return total_bins, wasted
-
-
-# -----------------------------------------------------------------------------
-# PERMUTATION HELPERS (NEW)
-# -----------------------------------------------------------------------------
-def swap_mutation(gene):
-    if len(gene) < 2:
-        return
-    i, j = random.sample(range(len(gene)), 2)
-    gene[i], gene[j] = gene[j], gene[i]
-
-
-def displacement_mutation(gene):
-    # minimal example
-    i, j = sorted(random.sample(range(len(gene)), 2))
-    segment = gene[i:j]
-    del gene[i:j]
-    k = random.randint(0, len(gene))
-    for x in segment:
-        gene.insert(k, x)
-
-
-def insertion_mutation(gene):
-    i, j = sorted(random.sample(range(len(gene)), 2))
-    val = gene.pop(j)
-    gene.insert(i, val)
-
-
-def inversion_mutation(gene):
-    i, j = sorted(random.sample(range(len(gene)), 2))
-    gene[i:j] = reversed(gene[i:j])
-
-
-def scramble_mutation(gene):
-    i, j = sorted(random.sample(range(len(gene)), 2))
-    subset = gene[i:j]
-    random.shuffle(subset)
-    gene[i:j] = subset
-
-
-def pmx_crossover(g1, g2):
-    # placeholder demonstration
-    return g1[:], g2[:]
-
-
-def ox_crossover(g1, g2):
-    return g1[:], g2[:]
-
-
-def cycle_crossover(g1, g2):
-    return g1[:], g2[:]
-
-
-# -----------------------------------------------------------------------------
 # POPULATION INITIALIZATION
 # -----------------------------------------------------------------------------
 def init_population():
-    # now just defer to config.strategy for domain-specific init
-    if ga_config and ga_config.strategy:
-        return ga_config.strategy.init_population()
-    # fallback to original code if config not set
     target_length = len(ga_target)
     population = []
     for _ in range(ga_popsize):
@@ -326,9 +122,6 @@ def different_alleles(str1, str2):
 
 
 def calc_fitness(population):
-    if ga_config and ga_config.strategy:
-        return ga_config.strategy.calc_fitness(population)
-    # fallback to original code
     target = ga_target
     target_length = len(target)
     for candidate in population:
@@ -602,9 +395,12 @@ def mate(population, buffer):
         parent1 = select_one_parent(population)
         parent2 = select_one_parent(population)
 
-        # domain-specific crossover
-        if ga_config and ga_config.strategy:
-            child1, child2 = ga_config.strategy.crossover(parent1, parent2)
+        if ga_crossover_method == "single":
+            child1, child2 = single_point_crossover(parent1, parent2, target_length)
+        elif ga_crossover_method == "two_point":
+            child1, child2 = two_point_crossover(parent1, parent2, target_length)
+        elif ga_crossover_method == "uniform":
+            child1, child2 = uniform_crossover(parent1, parent2, target_length)
         else:
             child1, child2 = single_point_crossover(parent1, parent2, target_length)
 
@@ -616,15 +412,9 @@ def mate(population, buffer):
         buffer[i + 1].age = 0
 
         if random.random() < ga_mutationrate:
-            if ga_config and ga_config.strategy:
-                ga_config.strategy.mutate(buffer[i])
-            else:
-                mutate(buffer[i])
+            mutate(buffer[i])
         if random.random() < ga_mutationrate:
-            if ga_config and ga_config.strategy:
-                ga_config.strategy.mutate(buffer[i + 1])
-            else:
-                mutate(buffer[i + 1])
+            mutate(buffer[i + 1])
 
         i += 2
 
@@ -634,10 +424,7 @@ def mate(population, buffer):
         buffer[i].fitness = buffer[i - 1].fitness
         buffer[i].age = buffer[i - 1].age
         if random.random() < ga_mutationrate:
-            if ga_config and ga_config.strategy:
-                ga_config.strategy.mutate(buffer[i])
-            else:
-                mutate(buffer[i])
+            mutate(buffer[i])
 
     # 4) Aging-based replacement
     apply_aging_replacement(buffer)
@@ -924,8 +711,7 @@ def run_ga(
     age_limit=100,
     tournament_k=3,
     tournament_k_prob=3,
-    tournament_p=0.75,
-    problem_data=None
+    tournament_p=0.75
 ):
     """
     Run the GA with the specified settings, returning a dict of stats.
@@ -953,18 +739,6 @@ def run_ga(
     ga_tournament_k = tournament_k
     ga_tournament_k_prob = tournament_k_prob
     ga_tournament_p = tournament_p
-
-    # create config, set strategy
-    global ga_config
-    if ga_config.problem_type == "bin_packing" and problem_data:
-        ga_config.bin_capacity = problem_data["capacity"]
-        ga_config.strategy = BinPacking1DStrategy(ga_config)
-        # Overwrite GA population size or item count if necessary
-        # Print known solution info
-        print(f"Running bin packing for problem {problem_data['id']} with best known = {problem_data['best_known']}")
-    else:
-        ga_config = GAConfig(problem_type="string_match")  # or "bin_packing"
-        ga_config.select_strategy()
 
     random.seed(time.time())
     population, buffer = init_population()
@@ -1035,7 +809,7 @@ def run_ga(
         mate(population, buffer)
         population, buffer = swap(population, buffer)
 
-    results = {
+    return {
         "best_fitness_history": best_history,
         "mean_fitness_history": mean_history,
         "worst_fitness_history": worst_history,
@@ -1046,91 +820,11 @@ def run_ga(
         "converged_generation": converged_generation,
         "termination_reason": termination_reason
     }
-    if ga_config.problem_type == "bin_packing" and problem_data:
-        # Example: final bins might be read from final population
-        best_bins_used = population[0].fitness  # or however bin usage is tracked
-        print(f"Bins used: {best_bins_used}, Best known: {problem_data['best_known']}")
-        utilization = problem_data['capacity'] * best_bins_used
-        total_items_space = sum(problem_data['items'])
-        print(f"Total item space: {total_items_space}, Utilization: {total_items_space/utilization:.2f}")
-
-    return results
 
 
 # -----------------------------------------------------------------------------
 # MAIN (STANDALONE EXECUTION)
 # -----------------------------------------------------------------------------
-def parse_binpack_file(filepath):
-    """
-    Parse a binpack1.txt file where the format is:
-    Number of test problems
-    For each problem: ID, bin capacity, number of items, best known solution
-    Then item sizes (one line per problem).
-    Returns a list of dicts with keys:
-       'id', 'capacity', 'num_items', 'best_known', 'items'
-    """
-    problems = []
-    with open(filepath, 'r') as f:
-        lines = [line.strip() for line in f if line.strip()]
-    idx = 0
-    total_problems = int(lines[idx]); idx += 1
-    for _ in range(total_problems):
-        parts = lines[idx].split()
-        idx += 1
-        prob_id = parts[0]
-        capacity = int(parts[1])
-        num_items = int(parts[2])
-        best_known = int(parts[3])
-        item_sizes = list(map(int, lines[idx].split()))
-        idx += 1
-        problems.append({
-            "id": prob_id,
-            "capacity": capacity,
-            "num_items": num_items,
-            "best_known": best_known,
-            "items": item_sizes
-        })
-    return problems
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="GA for string matching or bin packing.")
-    parser.add_argument("--problem_type", choices=["string_match","bin_packing"], default="string_match",
-                        help="Select the problem type.")
-    parser.add_argument("--binpack_file", type=str, default="binpack1.txt",
-                        help="Path to bin packing data file.")
-    parser.add_argument("--select_problem", type=str, default=None,
-                        help="Specify problem ID or index to run.")
-    # ...add more CLI arguments as needed (crossover, mutation, popsize, etc.)...
-    args = parser.parse_args()
-
-    if args.problem_type == "bin_packing":
-        binpack_data = parse_binpack_file(args.binpack_file)
-        # Optionally choose a problem by ID or index
-        chosen_problem = None
-        if args.select_problem is not None:
-            for i, pb in enumerate(binpack_data):
-                if pb["id"] == args.select_problem or str(i) == args.select_problem:
-                    chosen_problem = pb
-                    break
-            if not chosen_problem:
-                print(f"Problem '{args.select_problem}' not found, defaulting to first.")
-                chosen_problem = binpack_data[0]
-        else:
-            chosen_problem = binpack_data[0]
-        # ...store chosen_problem in a global or pass it to run_ga...
-        ga_config = GAConfig(problem_type="bin_packing")  # override default
-        # ...existing code...
-    else:
-        ga_config = GAConfig(problem_type="string_match")
-        # ...existing code...
-
-    # ...existing code that sets up other GA parameters from CLI...
-
-    # Finally run or call main
-    main()
-
 def main():
     random.seed(time.time())
     population, buffer = init_population()
@@ -1222,5 +916,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
