@@ -5,10 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # -----------------------------------------------------------------------------
-# GLOBAL PARAMETERS - NEW/UPDATED
+# global parameters - new/updated
 # -----------------------------------------------------------------------------
 ga_selection_method = "tournament_probabilistic"      # "rws", "sus", "tournament_deterministic", "tournament_probabilistic"
-ga_use_linear_scaling = True     # if True, apply linear scaling for RWS or SUS
+ga_use_linear_scaling = True     # if true, apply linear scaling for rws or sus
 ga_max_fitness_ratio = 2.0       #maximum ratio (scaled_best / scaled_avg) to limit dominance
 ga_tournament_k = 3              #'k' for deterministic tournament
 ga_tournament_k_prob = 3         #'k' for probabilistic (non-determinstic) tournament
@@ -17,8 +17,8 @@ ga_tournament_p = 0.75           #'p' for probabilistic (non-determinstic) tourn
 ga_use_aging = True             #enable or disable aging-based survival
 ga_age_limit = 100               #default age limit for individuals
 
-# Existing parameters for GA:
-ga_popsize = 1000
+# existing parameters for ga:
+ga_popsize = 100
 ga_maxiter = 250
 ga_elitrate = 0.10
 ga_mutationrate = 0.55
@@ -31,7 +31,7 @@ ga_distance_metric = "levenshtein" # "ulam" or "levenshtein"
 
 
 # -----------------------------------------------------------------------------
-# CANDIDATE CLASS WITH AGE
+# candidate class with age
 # -----------------------------------------------------------------------------
 class Candidate:
     def __init__(self, gene, fitness=0):
@@ -41,9 +41,10 @@ class Candidate:
 
 
 # -----------------------------------------------------------------------------
-# POPULATION INITIALIZATION
+# population initialization
 # -----------------------------------------------------------------------------
 def init_population():
+    #initialize a population of random strings
     target_length = len(ga_target)
     population = []
     for _ in range(ga_popsize):
@@ -55,7 +56,7 @@ def init_population():
 
 
 # -----------------------------------------------------------------------------
-# FITNESS UTILITIES
+# fitness utilities
 # -----------------------------------------------------------------------------
 def longest_common_subsequence(str1, str2):
     m, n = len(str1), len(str2)
@@ -122,6 +123,7 @@ def different_alleles(str1, str2):
 
 
 def calc_fitness(population):
+    #calculates the fitness based on the chosen fitness mode
     target = ga_target
     target_length = len(target)
     for candidate in population:
@@ -156,7 +158,7 @@ def sort_by_fitness(population):
 
 
 # -----------------------------------------------------------------------------
-# SELECTION: LINEAR SCALING FOR RWS / SUS
+# selection: linear scaling for rws / sus
 # -----------------------------------------------------------------------------
 def linear_scale_fitness(population, max_ratio=2.0):
     raw_fitnesses = [c.fitness for c in population]
@@ -198,7 +200,7 @@ def linear_scale_fitness(population, max_ratio=2.0):
 
 
 # -----------------------------------------------------------------------------
-# SELECTION METHODS
+# selection methods
 # -----------------------------------------------------------------------------
 def rws_select_one(population):
     total = sum(c.scaled_fitness for c in population)
@@ -266,9 +268,9 @@ def old_roulette_wheel_select(candidates):
 
 def select_one_parent(population):
     """
-    Master selection function that picks ONE parent
-    using ga_selection_method. If we are doing RWS/SUS, we must ensure
-    .scaled_fitness is defined. If linear_scaling is off, we define
+    master selection function that picks one parent
+    using ga_selection_method. if we are doing rws/sus, we must ensure
+    .scaled_fitness is defined. if linear_scaling is off, we define
     scaled_fitness = 1/(1+fitness) as a fallback.
     """
     method = ga_selection_method.lower()
@@ -276,19 +278,19 @@ def select_one_parent(population):
     if method == "rws":
         return rws_select_one(population)
     elif method == "sus":
-        # If we want exactly 1 parent, pick from the list that SUS returns
+        # if we want exactly 1 parent, pick from the list that sus returns
         return sus_select_parents(population, 1)[0]
     elif method == "tournament_deterministic":
         return tournament_deterministic_select_one(population, ga_tournament_k)
     elif method == "tournament_probabilistic":
         return tournament_probabilistic_select_one(population, ga_tournament_k_prob, ga_tournament_p)
     else:
-        # Fallback to old method
+        # fallback to old method
         return old_roulette_wheel_select(population)
 
 
 # -----------------------------------------------------------------------------
-# CROSSOVER + MUTATION
+# crossover + mutation
 # -----------------------------------------------------------------------------
 def single_point_crossover(parent1, parent2, target_length):
     crossover_point = random.randint(0, target_length - 1)
@@ -298,6 +300,7 @@ def single_point_crossover(parent1, parent2, target_length):
 
 
 def two_point_crossover(parent1, parent2, target_length):
+    #two-point crossover picks two cut points
     point1, point2 = sorted(random.sample(range(target_length), 2))
     child1 = (parent1.gene[:point1] +
               parent2.gene[point1:point2] +
@@ -322,6 +325,7 @@ def uniform_crossover(parent1, parent2, target_length):
 
 
 def mutate(candidate):
+    #performs a simple mutation within the gene
     target_length = len(ga_target)
     pos = random.randint(0, target_length - 1)
     delta = random.randint(32, 121)
@@ -333,19 +337,20 @@ def mutate(candidate):
 
 
 # -----------------------------------------------------------------------------
-# ELITISM
+# elitism
 # -----------------------------------------------------------------------------
 def elitism(population, buffer, elite_size):
     for i in range(elite_size):
         buffer[i].gene = population[i].gene
         buffer[i].fitness = population[i].fitness
-        buffer[i].age = population[i].age + 1  # Surviving => increment age
+        buffer[i].age = population[i].age + 1  # surviving => increment age
 
 
 # -----------------------------------------------------------------------------
-# AGING-BASED SURVIVAL
+# aging-based survival
 # -----------------------------------------------------------------------------
 def apply_aging_replacement(population):
+    #if the individual's age exceeds the limit, replace it
     if not ga_use_aging:
         return
     target_length = len(ga_target)
@@ -370,16 +375,16 @@ def apply_aging_replacement(population):
 
 
 # -----------------------------------------------------------------------------
-# MATE FUNCTION (BREED NEXT GENERATION)
+# mate function (breed next generation)
 # -----------------------------------------------------------------------------
 def mate(population, buffer):
     elite_size = int(ga_popsize * ga_elitrate)
     target_length = len(ga_target)
 
-    # 1) Elitism
+    # 1) elitism
     elitism(population, buffer, elite_size)
 
-    # 2) If using RWS or SUS:
+    # 2) if using rws or sus:
     method = ga_selection_method.lower()
     if method in ["rws", "sus"]:
         if ga_use_linear_scaling:
@@ -389,7 +394,7 @@ def mate(population, buffer):
             for c in population:
                 c.scaled_fitness = 1.0 / (1.0 + c.fitness)
 
-    # 3) Fill remainder of buffer
+    # 3) fill remainder of buffer
     i = elite_size
     while i < ga_popsize - 1:
         parent1 = select_one_parent(population)
@@ -418,7 +423,7 @@ def mate(population, buffer):
 
         i += 2
 
-    # Handle odd count
+    # handle odd count
     if ga_popsize % 2 == 1 and i < ga_popsize:
         buffer[i].gene = buffer[i - 1].gene
         buffer[i].fitness = buffer[i - 1].fitness
@@ -426,12 +431,12 @@ def mate(population, buffer):
         if random.random() < ga_mutationrate:
             mutate(buffer[i])
 
-    # 4) Aging-based replacement
+    # 4) aging-based replacement
     apply_aging_replacement(buffer)
 
 
 # -----------------------------------------------------------------------------
-# SWAP, PRINT, AND STATISTICS
+# swap, print, and statistics
 # -----------------------------------------------------------------------------
 def swap(population, buffer):
     return buffer, population
@@ -497,7 +502,7 @@ def compute_timing_metrics(generation_start_cpu, overall_start_wall):
 
 
 # -----------------------------------------------------------------------------
-# DIVERSITY METRICS
+# diversity metrics
 # -----------------------------------------------------------------------------
 def calculate_avg_different_alleles(population):
     total_diff = 0
@@ -546,7 +551,7 @@ def calculate_avg_population_distance(population, distance_metric="levenshtein")
 
     if used_levenshtein_fallback and distance_metric == "ulam":
         ga_distance_metric = "levenshtein"
-        print("Warning: Had to fall back to Levenshtein distance because Ulam conditions were not met")
+        print("warning: had to fall back to levenshtein distance because ulam conditions were not met")
 
     if count == 0:
         return 0, ga_distance_metric
@@ -574,7 +579,7 @@ def calculate_avg_shannon_entropy(population):
 
 
 # -----------------------------------------------------------------------------
-# VISUALIZATIONS (RESTORED 1:1 WITH ORIGINAL)
+# visualizations (restored 1:1 with original)
 # -----------------------------------------------------------------------------
 def plot_fitness_evolution(best_history, mean_history, worst_history):
     generations = list(range(len(best_history)))
@@ -653,30 +658,30 @@ def plot_entropy_evolution(entropy_history, allele_diff_history, distance_histor
     generations = list(range(len(entropy_history)))
     plt.figure(figsize=(14, 8))
 
-    # EXACT color usage as your original code
-    plt.plot(generations, entropy_history, label="Shannon Entropy", linewidth=2, color='purple')
-    plt.plot(generations, allele_diff_history, label="Avg Different Alleles", linewidth=2, color='red')
-    plt.plot(generations, distance_history, label="Avg Levenshtein Distance", linewidth=2, color='blue')
+    # exact color usage as your original code
+    plt.plot(generations, entropy_history, label="shannon entropy", linewidth=2, color='purple')
+    plt.plot(generations, allele_diff_history, label="avg different alleles", linewidth=2, color='red')
+    plt.plot(generations, distance_history, label="avg levenshtein distance", linewidth=2, color='blue')
 
-    # Annotate at 10 points if length > 1
+    # annotate at 10 points if length > 1
     if len(generations) > 1:
         label_points = [int(i * (len(generations) - 1) / 9) for i in range(10)]
         for idx in label_points:
-            plt.annotate(f"Entropy: {entropy_history[idx]:.2f}",
+            plt.annotate(f"entropy: {entropy_history[idx]:.2f}",
                          (idx, entropy_history[idx]),
                          textcoords="offset points",
                          xytext=(0, 10),
                          ha='center',
                          color='purple',
                          fontsize=8)
-            plt.annotate(f"Alleles: {allele_diff_history[idx]:.2f}",
+            plt.annotate(f"alleles: {allele_diff_history[idx]:.2f}",
                          (idx, allele_diff_history[idx]),
                          textcoords="offset points",
                          xytext=(0, -15),
                          ha='center',
                          color='red',
                          fontsize=8)
-            plt.annotate(f"Levenshtein: {distance_history[idx]:.2f}",
+            plt.annotate(f"levenshtein: {distance_history[idx]:.2f}",
                          (idx, distance_history[idx]),
                          textcoords="offset points",
                          xytext=(0, 10),
@@ -684,9 +689,9 @@ def plot_entropy_evolution(entropy_history, allele_diff_history, distance_histor
                          color='blue',
                          fontsize=8)
 
-    plt.xlabel("Generation")
-    plt.ylabel("Diversity Metrics")
-    plt.title("Population Diversity Metrics per Generation")
+    plt.xlabel("generation")
+    plt.ylabel("diversity metrics")
+    plt.title("population diversity metrics per generation")
     plt.legend(loc='upper right')
     plt.grid(True)
     plt.tight_layout()
@@ -694,7 +699,7 @@ def plot_entropy_evolution(entropy_history, allele_diff_history, distance_histor
 
 
 # -----------------------------------------------------------------------------
-# GA EXECUTION (PROGRAMMATIC ENTRY POINT)
+# ga execution (programmatic entry point)
 # -----------------------------------------------------------------------------
 def run_ga(
     crossover_method="two_point",
@@ -714,7 +719,7 @@ def run_ga(
     tournament_p=0.75
 ):
     """
-    Run the GA with the specified settings, returning a dict of stats.
+    run the ga with the specified settings, returning a dict of stats.
     """
     global ga_crossover_method, ga_fitness_mode, ga_lcs_bonus, ga_mutationrate
     global ga_popsize, ga_distance_metric, ga_max_runtime
@@ -757,7 +762,7 @@ def run_ga(
 
     for iteration in range(ga_maxiter):
         if (time.time() - overall_start_wall) >= ga_max_runtime:
-            print(f"Time limit of {ga_max_runtime} seconds reached after {iteration} generations.")
+            print(f"time limit of {ga_max_runtime} seconds reached after {iteration} generations.")
             termination_reason = "time_limit"
             converged_generation = iteration
             break
@@ -781,7 +786,7 @@ def run_ga(
         if stats['selection_variance'] >0:
             stats['selection_variance']=stats['selection_variance'] * 10 ** (-math.floor(math.log10(stats['selection_variance'])))
         print(
-            f"Gen {iteration}: mean={stats['mean']:.2f}, std={stats['std']:.2f}, worst={stats['worst_fitness']}, "
+            f"gen {iteration}: mean={stats['mean']:.2f}, std={stats['std']:.2f}, worst={stats['worst_fitness']}, "
             f"range={stats['fitness_range']}, selection_var={stats['selection_variance']:.4f}"
         )
         print(
@@ -792,7 +797,7 @@ def run_ga(
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
         gen_ticks = time.perf_counter_ns() - generation_start_ticks
         print(
-            f"   CPU time={timing['generation_cpu_time']:.4f}s, elapsed={timing['elapsed_time']:.2f}s, "
+            f"   cpu time={timing['generation_cpu_time']:.4f}s, elapsed={timing['elapsed_time']:.2f}s, "
             f"raw ticks={gen_ticks}, tick_time={gen_ticks/1e9:.6f}s"
         )
 
@@ -801,7 +806,7 @@ def run_ga(
         fitness_distributions.append([cand.fitness for cand in population])
 
         if population[0].fitness == 0:
-            print("Target reached!")
+            print("target reached!")
             termination_reason = "solution_found"
             converged_generation = iteration
             break
@@ -823,7 +828,7 @@ def run_ga(
 
 
 # -----------------------------------------------------------------------------
-# MAIN (STANDALONE EXECUTION)
+# main (standalone execution)
 # -----------------------------------------------------------------------------
 def main():
     random.seed(time.time())
@@ -848,13 +853,13 @@ def main():
     else:
         print(f"using fitness mode: {ga_fitness_mode}")
 
-    print(f"Maximum runtime set to {ga_max_runtime} seconds")
-    print(f"Using {ga_distance_metric} distance metric for population diversity")
-    print(f"Selection method: {ga_selection_method}, aging={ga_use_aging} (limit={ga_age_limit})")
+    print(f"maximum runtime set to {ga_max_runtime} seconds")
+    print(f"using {ga_distance_metric} distance metric for population diversity")
+    print(f"selection method: {ga_selection_method}, aging={ga_use_aging} (limit={ga_age_limit})")
 
     for iteration in range(ga_maxiter):
         if (time.time() - overall_start_wall) >= ga_max_runtime:
-            print(f"Time limit of {ga_max_runtime} seconds reached after {iteration} generations.")
+            print(f"time limit of {ga_max_runtime} seconds reached after {iteration} generations.")
             break
 
         generation_start_cpu = time.process_time()
@@ -889,7 +894,7 @@ def main():
         timing = compute_timing_metrics(generation_start_cpu, overall_start_wall)
         gen_ticks = time.perf_counter_ns() - generation_start_ticks
         print(
-            f"   CPU time = {timing['generation_cpu_time']:.4f}s, elapsed = {timing['elapsed_time']:.2f}s, "
+            f"   cpu time = {timing['generation_cpu_time']:.4f}s, elapsed = {timing['elapsed_time']:.2f}s, "
             f"raw ticks = {gen_ticks}, tick_time = {gen_ticks/1e9:.6f}s"
         )
 
@@ -906,9 +911,9 @@ def main():
         population, buffer = swap(population, buffer)
 
     final_time = time.time() - overall_start_wall
-    print(f"Total runtime: {final_time:.2f} seconds")
+    print(f"total runtime: {final_time:.2f} seconds")
 
-    # Plot results (1:1 with original code style)
+    # plot results (1:1 with original code style)
     plot_fitness_evolution(best_history, mean_history, worst_history)
     plot_fitness_boxplots(fitness_distributions)
     plot_entropy_evolution(entropy_history, allele_diff_history, distance_history)
@@ -916,3 +921,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

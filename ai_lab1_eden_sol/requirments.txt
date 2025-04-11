@@ -1,0 +1,24 @@
+Python interpreter : python 3.12.4
+Libraries : matplotlib.pyplot, numpy , copy
+
+
+how to run the files:
+
+  * for questions 1-10 :
+	run file GA_solution
+	GA_solution.exe <heuristic_type> <mutation_type> <crossover_type> <selection_type> <max_time_seconds>
+	heuristic type: LCS / original
+	mutation type : y / n 
+	crossover type: single / two / uniform / none 
+	selection type: tournament deterministic / tournament probabilistic / RWS / SUS / none
+
+  * for question 11:
+	run file bin_packing_ga
+	bin_packing_ga.exe <falkenauer_file> <fit_type> <max_time_seconds>
+	<falkenauer_file>  the path to file
+	fit type : f / d (f is First fit and d is FFD)
+
+  * for question 12:
+	run file arc_ga
+	arc_ga.exe <jason_file> <max_time_seconds>
+	 
