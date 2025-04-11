@@ -992,11 +992,12 @@ def run_ga(
 if __name__=="__main__":
     # run string
     run_ga(
-        problem_type="binpacking",
-        target_string="hello world!",
-        pop_size=40,
+        problem_type="string",
+        target_string="testing string123 diff_chars",
+        pop_size=500,
         max_iter=300,
         binpack_heuristic="best_fit_decreasing"  # won't matter for string
+
     )
 
     # run binpacking
